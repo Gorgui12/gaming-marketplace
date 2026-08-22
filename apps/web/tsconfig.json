@@ -2,29 +2,24 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "ES2022"
-    ],
+    "lib": ["dom", "dom.iterable", "ES2022"],
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
     "noEmit": true,
     "incremental": true,
     "plugins": [
-      {
-        "name": "next"
-      }
+      { "name": "next" }
     ],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@gm/validation": ["../../packages/validation/src"],
+      "@gm/utils": ["../../packages/utils/src"],
+      "@gm/ui": ["../../packages/ui/src"],
+      "@gm/types": ["../../packages/types/src"],
+      "@gm/config": ["../../packages/config/src"]
     },
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "allowJs": true
   },
   "include": [
@@ -33,7 +28,5 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules"
-  ]
+  "exclude": ["node_modules"]
 }
