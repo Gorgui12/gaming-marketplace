@@ -2,6 +2,15 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   transpilePackages: ['@gm/ui', '@gm/types', '@gm/config', '@gm/validation', '@gm/utils'],
+  // Les packages @gm/* compilent avec moduleResolution NodeNext : leurs
+  // imports internes utilisent l'extension .js alors que les sources sont .ts.
+  // Sans cet alias, webpack ne résout pas ./x.js -> ./x.ts quand il compile
+  // les sources directement (cas du build Vercel où dist/ n'existe pas).
+  experimental: {
+    extensionAlias: {
+      '.js': ['.ts', '.tsx', '.js'],
+    },
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
