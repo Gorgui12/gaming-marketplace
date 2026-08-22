@@ -96,7 +96,7 @@ export function AffiliateApplyForm() {
           </div>
         </Field>
 
-        <Field label="Nombre d'abonnés (approximatif)">
+        <Field label="Nombres d'abonnés (approximatif)">
           <input
             type="number"
             min={0}
