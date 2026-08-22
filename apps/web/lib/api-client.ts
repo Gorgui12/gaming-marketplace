@@ -2,13 +2,18 @@ import type { ApiResponse } from '@gm/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
+const API_TIMEOUT_MS = 8000;
+
 export async function apiFetch<T>(
   path: string,
   init?: RequestInit & { json?: unknown },
 ): Promise<T> {
-  const { json, headers, ...rest } = init ?? {};
+  const { json, headers, signal, ...rest } = init ?? {};
   const res = await fetch(`${API_URL}${path}`, {
     ...rest,
+    // Évite que le build Vercel (génération statique/ISR) pende indéfiniment
+    // si l'API est injoignable ou endormie (free tier).
+    signal: signal ?? AbortSignal.timeout(API_TIMEOUT_MS),
     headers: {
       ...(json ? { 'Content-Type': 'application/json' } : {}),
       ...headers,

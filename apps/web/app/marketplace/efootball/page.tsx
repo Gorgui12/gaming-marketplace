@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { ListingCard } from '@/components/listing-card';
 import { breadcrumbJsonLd } from '@/lib/seo';
 
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: 'Comptes eFootball à vendre au Sénégal | Dakar, Thiès, tout le pays',
   description:

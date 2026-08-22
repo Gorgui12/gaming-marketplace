@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   alternates: { canonical: '/marketplace/efootball/senegal' },
 };
 
+export const revalidate = 60;
+
 const SENEGAL_CITIES = ['Dakar', 'Thiès', 'Saint-Louis', 'Touba', 'Ziguinchor', 'Kaolack'];
 
 const SENEGAL_FAQ = [

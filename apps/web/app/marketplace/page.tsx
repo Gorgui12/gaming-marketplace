@@ -6,6 +6,8 @@ import { ListingCard } from '@/components/listing-card';
 import { apiFetch } from '@/lib/api-client';
 import type { Listing, Paginated } from '@gm/types';
 
+export const revalidate = 60;
+
 export const metadata: Metadata = {
   title: 'Marketplace',
   description: 'Tous les comptes gaming vérifiés disponibles à l\'achat.',
