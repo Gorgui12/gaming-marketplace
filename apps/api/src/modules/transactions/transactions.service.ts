@@ -302,7 +302,68 @@ export class TransactionsService {
 
     return transaction;
   }
-    static async listMine(userId: string) {
+
+  /**
+   * Action admin: litige tranché en faveur du vendeur — le vendeur reçoit
+   * son payout, la transaction est complétée. Miroir exact d'adminRefund:
+   * approuve les commissions affiliées associées et marque l'annonce SOLD.
+   * Le transfert Mobile Money réel reste une action opérationnelle distincte
+   * (même logique que adminRefund, voir docs/PAYMENTS.md).
+   */
+  static async adminReleaseToSeller(input: {
+    transactionId: string;
+    adminId: string;
+    reason: string;
+  }) {
+    const transaction = await TransactionModel.findById(input.transactionId);
+    if (!transaction) {
+      throw AppError.notFound(ErrorCode.TRANSACTION_NOT_FOUND, 'Transaction introuvable');
+    }
+
+    assertTransition(
+      transaction.escrowStatus as TransactionState,
+      TransactionState.SELLER_PAYOUT_PENDING,
+      'ADMIN',
+    );
+    transaction.stateHistory.push({
+      from: transaction.escrowStatus,
+      to: TransactionState.SELLER_PAYOUT_PENDING,
+      at: new Date(),
+      actor: input.adminId,
+    });
+    transaction.escrowStatus = TransactionState.SELLER_PAYOUT_PENDING;
+    await transaction.save();
+
+    assertTransition(
+      transaction.escrowStatus as TransactionState,
+      TransactionState.COMPLETED,
+      'ADMIN',
+    );
+    transaction.stateHistory.push({
+      from: transaction.escrowStatus,
+      to: TransactionState.COMPLETED,
+      at: new Date(),
+      actor: input.adminId,
+    });
+    transaction.escrowStatus = TransactionState.COMPLETED;
+    await transaction.save();
+
+    await ListingModel.findByIdAndUpdate(transaction.listing, { status: ListingStatus.SOLD });
+
+    await AffiliateCommissionService.approveForTransaction(String(transaction._id));
+
+    await AuditService.log({
+      actor: input.adminId,
+      action: 'transaction.released_to_seller',
+      entityType: 'Transaction',
+      entityId: String(transaction._id),
+      metadata: { reason: input.reason },
+    });
+
+    return transaction;
+  }
+
+  static async listMine(userId: string) {
     return TransactionModel.find({ $or: [{ buyer: userId }, { seller: userId }] })
       .sort({ createdAt: -1 })
       .limit(100);

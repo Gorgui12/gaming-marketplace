@@ -16,6 +16,7 @@ import { paymentsRouter } from './modules/payments/payments.routes.js';
 import { disputesRouter } from './modules/disputes/disputes.routes.js';
 import { affiliatesRouter } from './modules/affiliates/affiliates.routes.js';
 import { adminAffiliatesRouter } from './modules/affiliates/admin/admin-affiliates.routes.js';
+import { adminRouter } from './modules/admin/admin.routes.js';
 import { adminGamesRouter } from './modules/games/admin-games.routes.js';
 import { gamesRouter } from './modules/games/games.routes.js';
 import { adminListingsRouter } from './modules/listings/admin-listings.routes.js';
@@ -55,6 +56,7 @@ export function createApp(): Express {
   app.use('/api/v1/payments', paymentsRouter);
   app.use('/api/v1/disputes', disputesRouter);
   app.use('/api/v1/affiliates', affiliatesRouter);
+  app.use('/api/v1/admin', adminRouter);
   app.use('/api/v1/admin', adminAffiliatesRouter);
   app.use('/api/v1/admin', adminGamesRouter);
   app.use('/api/v1/admin', adminListingsRouter);

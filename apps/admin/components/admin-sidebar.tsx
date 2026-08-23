@@ -1,21 +1,28 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
+  LayoutDashboard,
   Users,
   Ticket,
   Megaphone,
   Wallet,
   Gamepad2,
   ClipboardList,
+  Scale,
+  ArrowLeftRight,
   LogOut,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
 
 const NAV_ITEMS = [
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/games', label: 'Jeux', icon: Gamepad2 },
   { href: '/listings', label: 'Annonces', icon: ClipboardList },
+  { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
+  { href: '/disputes', label: 'Litiges', icon: Scale },
+  { href: '/users', label: 'Utilisateurs', icon: Users },
   { href: '/affiliates', label: 'Affiliés', icon: Users },
   { href: '/promo-codes', label: 'Codes promo', icon: Ticket },
   { href: '/affiliate-campaigns', label: 'Campagnes', icon: Megaphone },
@@ -24,6 +31,7 @@ const NAV_ITEMS = [
 
 export function AdminSidebar() {
   const router = useRouter();
+  const pathname = usePathname();
 
   async function handleLogout() {
     await apiFetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
@@ -39,16 +47,23 @@ export function AdminSidebar() {
         </p>
       </div>
       <nav className="space-y-0.5 px-3">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-bone/70 hover:bg-navy-mid hover:text-bone"
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </Link>
-        ))}
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm ${
+                active
+                  ? 'bg-navy-mid text-bone'
+                  : 'text-bone/70 hover:bg-navy-mid hover:text-bone'
+              }`}
+            >
+              <Icon className={`h-4 w-4 ${active ? 'text-gold' : ''}`} />
+              {label}
+            </Link>
+          );
+        })}
       </nav>
       <div className="mt-auto border-t border-white/10 p-3">
         <button

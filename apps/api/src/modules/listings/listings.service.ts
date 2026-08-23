@@ -1,4 +1,5 @@
 import { ListingStatus } from '@gm/types';
+import { isValidObjectId } from 'mongoose';
 import { slugify, uniqueSlug } from '@gm/utils';
 import type { CreateListingInput, ListingSearchQuery } from '@gm/validation';
 import { AppError } from '../../lib/errors/app-error.js';
@@ -34,7 +35,24 @@ export class ListingsService {
 
   static async search(query: ListingSearchQuery) {
     const filter: Record<string, unknown> = { status: ListingStatus.PUBLISHED };
-    if (query.game) filter.game = query.game;
+    if (query.game) {
+      // Le front filtre par slug (ex: /marketplace/efootball -> ?game=efootball)
+      // mais les annonces référencent le jeu par ObjectId. On résout donc le
+      // slug (ou l'ObjectId direct) vers l'id du jeu.
+      const game = isValidObjectId(query.game)
+        ? await GameModel.findById(query.game).select({ _id: 1 })
+        : await GameModel.findOne({ slug: query.game.toLowerCase() }).select({ _id: 1 });
+      if (!game) {
+        return {
+          items: [],
+          page: query.page,
+          pageSize: query.pageSize,
+          total: 0,
+          totalPages: 0,
+        };
+      }
+      filter.game = game._id;
+    }
     if (query.country) filter.country = query.country;
     if (query.minPrice !== undefined || query.maxPrice !== undefined) {
       filter.price = {
