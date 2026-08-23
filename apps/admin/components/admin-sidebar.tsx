@@ -1,5 +1,17 @@
+'use client';
+
 import Link from 'next/link';
-import { Users, Ticket, Megaphone, Wallet, Gamepad2, ClipboardList } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  Users,
+  Ticket,
+  Megaphone,
+  Wallet,
+  Gamepad2,
+  ClipboardList,
+  LogOut,
+} from 'lucide-react';
+import { apiFetch } from '@/lib/api-client';
 
 const NAV_ITEMS = [
   { href: '/games', label: 'Jeux', icon: Gamepad2 },
@@ -11,8 +23,16 @@ const NAV_ITEMS = [
 ];
 
 export function AdminSidebar() {
+  const router = useRouter();
+
+  async function handleLogout() {
+    await apiFetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
+    router.push('/login');
+    router.refresh();
+  }
+
   return (
-    <aside className="w-56 shrink-0 border-r border-white/10 bg-navy-deep">
+    <aside className="flex w-56 shrink-0 flex-col border-r border-white/10 bg-navy-deep">
       <div className="px-5 py-5">
         <p className="font-display text-sm tracking-wide text-bone">
           GM<span className="text-gold">ADMIN</span>
@@ -30,6 +50,16 @@ export function AdminSidebar() {
           </Link>
         ))}
       </nav>
+      <div className="mt-auto border-t border-white/10 p-3">
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-bone/70 hover:bg-coral/10 hover:text-coral"
+        >
+          <LogOut className="h-4 w-4" />
+          Déconnexion
+        </button>
+      </div>
     </aside>
   );
 }

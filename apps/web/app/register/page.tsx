@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { registerSchema } from '@gm/validation';
 import { apiFetch } from '@/lib/api-client';
 import { getOrCreateTrackingSessionId } from '@/lib/tracking-session';
+import { notifyAuthChanged } from '@/lib/use-current-user';
 import { SiteNav } from '@/components/site-nav';
 import { validateForm, type FieldErrors } from '@/lib/form-validation';
 
@@ -54,6 +55,7 @@ export default function RegisterPage() {
         method: 'POST',
         json: parsed.data,
       });
+      notifyAuthChanged();
       router.push('/marketplace');
       router.refresh();
     } catch (err) {

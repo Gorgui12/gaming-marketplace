@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
-import { useCurrentUser } from '@/lib/use-current-user';
+import { notifyAuthChanged, useCurrentUser } from '@/lib/use-current-user';
 import { apiFetch } from '@/lib/api-client';
 
 export function SiteNav() {
@@ -39,6 +39,9 @@ export function SiteNav() {
   async function handleLogout() {
     setMenuOpen(false);
     await apiFetch('/api/v1/auth/logout', { method: 'POST' }).catch(() => {});
+    // Force toutes les instances de useCurrentUser (dont celle-ci) à re-fetch
+    // /auth/me, sinon le header reste en état "connecté" après la déconnexion.
+    notifyAuthChanged();
     router.push('/');
     router.refresh();
   }
