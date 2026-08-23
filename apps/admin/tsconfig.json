@@ -20,6 +20,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@gm/types": [
+        "../../packages/types/src"
+      ],
+      "@gm/utils": [
+        "../../packages/utils/src"
       ]
     },
     "types": [
