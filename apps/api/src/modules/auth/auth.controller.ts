@@ -6,10 +6,11 @@ import { createSessionToken } from './session.js';
 import { env } from '../../config/env.js';
 
 function setSessionCookie(res: Response, token: string): void {
+  const isProduction = env.NODE_ENV === 'production';
   res.cookie(env.SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
     maxAge: env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
   });
 }

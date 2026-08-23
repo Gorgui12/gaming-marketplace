@@ -2,7 +2,7 @@ import type { ApiResponse } from '@gm/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
-const API_TIMEOUT_MS = 8000;
+const API_TIMEOUT_MS = 15000;
 
 export async function apiFetch<T>(
   path: string,
