@@ -5,12 +5,18 @@ import { AuthService } from './auth.service.js';
 import { createSessionToken } from './session.js';
 import { env } from '../../config/env.js';
 
+function sessionCookieOptions(isProduction: boolean) {
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? ('none' as const) : ('lax' as const),
+  };
+}
+
 function setSessionCookie(res: Response, token: string): void {
   const isProduction = env.NODE_ENV === 'production';
   res.cookie(env.SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? 'none' : 'lax',
+    ...sessionCookieOptions(isProduction),
     maxAge: env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
   });
 }
@@ -38,7 +44,10 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const logout = asyncHandler(async (_req: Request, res: Response) => {
-  res.clearCookie(env.SESSION_COOKIE_NAME);
+  const isProduction = env.NODE_ENV === 'production';
+  // Les attributs doivent être identiques à ceux du setSessionCookie,
+  // sinon le navigateur ne supprime pas le cookie (mismatch secure/sameSite).
+  res.clearCookie(env.SESSION_COOKIE_NAME, sessionCookieOptions(isProduction));
   res.status(200).json({ success: true, data: null, message: 'Déconnecté' });
 });
 
