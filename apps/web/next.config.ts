@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
     // À restreindre à res.cloudinary.com une fois l'upload réellement intégré.
     remotePatterns: [{ protocol: 'https', hostname: '**' }],
   },
+  // Proxy /backend/* -> API. Le navigateur ne parle qu'à l'origine du site :
+  // le cookie de session devient first-party, sinon Safari iOS (ITP) jette
+  // les cookies tiers posés par un fetch cross-site et la connexion échoue
+  // silencieusement sur mobile alors que Chrome desktop fonctionne.
+  async rewrites() {
+    const backend = process.env.API_URL ?? 'http://localhost:4000';
+    return [{ source: '/backend/:path*', destination: `${backend}/:path*` }];
+  },
 };
 
 export default nextConfig;

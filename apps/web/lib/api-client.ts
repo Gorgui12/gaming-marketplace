@@ -1,6 +1,11 @@
 import type { ApiResponse } from '@gm/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+// Base relative : les requêtes partent vers /backend/* (même origine) et
+// Next.js les proxifie vers l'API (rewrite dans next.config.ts, cible
+// configurée par la variable d'environnement serveur API_URL). Indispensable
+// pour que le cookie de session soit first-party — Safari iOS bloque les
+// cookies tiers posés par un fetch cross-site.
+const API_BASE = '/backend';
 
 const API_TIMEOUT_MS = 15000;
 
@@ -9,7 +14,7 @@ export async function apiFetch<T>(
   init?: RequestInit & { json?: unknown },
 ): Promise<T> {
   const { json, headers, signal, ...rest } = init ?? {};
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     // Évite que le build Vercel (génération statique/ISR) pende indéfiniment
     // si l'API est injoignable ou endormie (free tier).
