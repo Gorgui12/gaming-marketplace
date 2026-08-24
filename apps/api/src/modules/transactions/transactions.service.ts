@@ -87,7 +87,11 @@ export class TransactionsService {
     }
 
     const netPrice = Math.max(0, listing.price - discountAmount);
-    const platformFee = computeFee(netPrice, DEFAULT_FEE_RULE);
+    // Le frais minimum (DEFAULT_FEE_RULE.minimumFee) ne doit jamais dépasser
+    // le montant net : sur une petite annonce (prix < minimumFee),
+    // sellerAmount serait négatif et rejeté par le schéma Mongoose
+    // (validation min:0) → 500 au checkout.
+    const platformFee = Math.min(computeFee(netPrice, DEFAULT_FEE_RULE), netPrice);
     const { sellerAmount } = splitAmount(netPrice, platformFee);
 
     const transaction = await TransactionModel.create({

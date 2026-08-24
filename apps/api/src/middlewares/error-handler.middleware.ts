@@ -35,6 +35,16 @@ export function errorHandlerMiddleware(
     return;
   }
 
+  // Erreurs de schéma Mongoose (ex: champ min/max violé) : problème de
+  // données métier → 400 explicite au lieu d'un 500 générique.
+  if (err instanceof Error && err.name === 'ValidationError') {
+    res.status(400).json({
+      success: false,
+      error: { code: ErrorCode.VALIDATION_ERROR, message: err.message },
+    });
+    return;
+  }
+
   logger.error({ err, path: req.path }, 'Erreur non gérée');
 
   res.status(500).json({
