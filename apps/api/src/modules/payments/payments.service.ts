@@ -1,10 +1,11 @@
-import { PaymentStatus, TransactionState, type AttributionType } from '@gm/types';
+import { PaymentStatus, TransactionState, ListingStatus, type AttributionType } from '@gm/types';
 import { generatePaymentReference } from '@gm/utils';
 import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { logger } from '../../lib/logger.js';
 import type { HydratedDocument } from 'mongoose';
 import { TransactionModel, type TransactionDocument } from '../transactions/transaction.model.js';
+import { ListingModel } from '../listings/listing.model.js';
 import { assertTransition } from '../transactions/transaction-state-machine.js';
 import { PayDunyaProvider } from './providers/paydunya.provider.js';
 import type {
@@ -42,15 +43,36 @@ export class PaymentService {
 
     const reference = transaction.paymentReference || generatePaymentReference();
 
-    const result = await provider.initiatePayment({
-      amount: transaction.amount,
-      currency: transaction.currency,
-      reference,
-      description: `Achat compte gaming — réf ${reference}`,
-      customer: { name: input.buyerName, email: input.buyerEmail, phone: input.buyerPhone },
-      returnUrl: input.returnUrl,
-      notifyUrl: `${env.API_PUBLIC_URL}${env.PAYDUNYA_IPN_PATH}`,
-    });
+    let result;
+    try {
+      result = await provider.initiatePayment({
+        amount: transaction.amount,
+        currency: transaction.currency,
+        reference,
+        description: `Achat compte gaming — réf ${reference}`,
+        customer: { name: input.buyerName, email: input.buyerEmail, phone: input.buyerPhone },
+        returnUrl: input.returnUrl,
+        notifyUrl: `${env.API_PUBLIC_URL}${env.PAYDUNYA_IPN_PATH}`,
+      });
+    } catch (err) {
+      // L'annonce a été réservée à la création de la transaction
+      // (TransactionsService.createFromListing). Si l'initiation du paiement
+      // échoue, aucun IPN ne viendra jamais — sans rollback, l'annonce reste
+      // bloquée en RESERVED et la page détail renvoie 404 pour toujours.
+      transaction.stateHistory.push({
+        from: transaction.escrowStatus,
+        to: TransactionState.CANCELLED,
+        at: new Date(),
+        actor: 'SYSTEM',
+      });
+      transaction.escrowStatus = TransactionState.CANCELLED;
+      await transaction.save().catch(() => {});
+      await ListingModel.updateOne(
+        { _id: transaction.listing, status: ListingStatus.RESERVED },
+        { $set: { status: ListingStatus.PUBLISHED } },
+      ).catch(() => {});
+      throw err;
+    }
 
     transaction.paymentReference = reference;
     // Token PayDunya conservé pour permettre une vérification active
