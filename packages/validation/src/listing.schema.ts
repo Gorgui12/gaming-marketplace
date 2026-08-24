@@ -1,11 +1,14 @@
 import { z } from 'zod';
+import { MIN_CHECKOUT_AMOUNT_XOF } from './transaction.schema.js';
 
 export const createListingSchema = z.object({
   game: z.string().min(1),
   category: z.string().optional(),
   title: z.string().min(5).max(140),
   description: z.string().min(20).max(5000),
-  price: z.number().positive().max(100_000_000),
+  // Pas de prix sous le minimum de checkout PayDunya (sinon l'annonce est
+  // publiable mais tout achat échoue à l'initiation du paiement).
+  price: z.number().min(MIN_CHECKOUT_AMOUNT_XOF).max(100_000_000),
   currency: z.string().length(3),
   country: z.string().length(2),
   teamStrength: z.number().int().nonnegative().optional(),

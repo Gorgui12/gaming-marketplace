@@ -4,6 +4,7 @@ import { computeFee, DEFAULT_FEE_RULE } from '@gm/config';
 import { splitAmount } from '@gm/utils';
 import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
+import { MIN_CHECKOUT_AMOUNT_XOF } from '@gm/validation';
 import { ListingModel } from '../listings/listing.model.js';
 import { GameModel } from '../games/game.model.js';
 import { TransactionModel } from './transaction.model.js';
@@ -87,6 +88,17 @@ export class TransactionsService {
     }
 
     const netPrice = Math.max(0, listing.price - discountAmount);
+    // PayDunya refuse les factures < MIN_CHECKOUT_AMOUNT_XOF (response_code
+    // 4003) : on rejette ici, AVANT de créer la transaction et réserver
+    // l'annonce, avec un message explicite pour l'acheteur — sinon il
+    // verrait un générique "Impossible d'initier le paiement".
+    if (netPrice < MIN_CHECKOUT_AMOUNT_XOF) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        `Le montant minimum d'une commande est de ${MIN_CHECKOUT_AMOUNT_XOF} FCFA`,
+        400,
+      );
+    }
     // Le frais minimum (DEFAULT_FEE_RULE.minimumFee) ne doit jamais dépasser
     // le montant net : sur une petite annonce (prix < minimumFee),
     // sellerAmount serait négatif et rejeté par le schéma Mongoose

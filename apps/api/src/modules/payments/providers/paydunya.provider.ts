@@ -99,8 +99,18 @@ export class PayDunyaProvider implements PaymentProvider {
     try {
       await invoice.create();
     } catch (err) {
-      logger.error({ err }, 'Échec initiation paiement PayDunya');
-      throw new AppError(ErrorCode.PAYMENT_INIT_FAILED, "Impossible d'initier le paiement", 502);
+      // Le SDK expose la réponse brute de PayDunya sur err.data (ex:
+      // { response_code: '4003', response_text: 'Invalid Total Amount...' }).
+      // On la journalise et on la remonte dans details — sans elle, le
+      // message générique rend le diagnostic impossible.
+      const providerResponse = (err as { data?: unknown } | null)?.data;
+      logger.error({ err, providerResponse }, 'Échec initiation paiement PayDunya');
+      throw new AppError(
+        ErrorCode.PAYMENT_INIT_FAILED,
+        "Impossible d'initier le paiement",
+        502,
+        providerResponse !== undefined ? { provider: providerResponse } : undefined,
+      );
     }
 
     if (!invoice.url || !invoice.token) {

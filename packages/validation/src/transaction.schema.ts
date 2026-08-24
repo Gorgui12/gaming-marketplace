@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+// Minimum de checkout imposé par PayDunya : toute facture d'un montant
+// inférieur est refusée avec response_code 4003 ("Invalid Total Amount.
+// Mimimum checkout amount is 200 FCFA."). On le partage ici car il contraint
+// à la fois le prix des annonces et le montant net facturé au checkout.
+export const MIN_CHECKOUT_AMOUNT_XOF = 200;
+
 export const initiateTransactionSchema = z.object({
   listingId: z.string().min(1),
   promoCode: z.string().min(1).max(30).optional(),
