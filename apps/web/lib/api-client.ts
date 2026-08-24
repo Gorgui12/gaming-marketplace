@@ -5,7 +5,12 @@ import type { ApiResponse } from '@gm/types';
 // configurée par la variable d'environnement serveur API_URL). Indispensable
 // pour que le cookie de session soit first-party — Safari iOS bloque les
 // cookies tiers posés par un fetch cross-site.
-const API_BASE = '/backend';
+// Côté serveur (SSR/ISR : marketplace, détail annonce…), une URL relative
+// n'est pas résoluble par fetch → on appelle l'API directement.
+const API_BASE =
+  typeof window === 'undefined'
+    ? (process.env.API_URL ?? 'http://localhost:4000')
+    : '/backend';
 
 const API_TIMEOUT_MS = 15000;
 

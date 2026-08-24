@@ -62,7 +62,7 @@ export default function HomePage() {
                   Acheter un compte
                 </Link>
                 <Link
-                  href="/marketplace"
+                  href="/dashboard/seller"
                   className="rounded-full border border-white/15 px-6 py-3.5 text-center text-sm text-bone hover:border-white/30"
                 >
                   Vendre mon compte

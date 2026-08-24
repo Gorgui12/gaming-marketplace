@@ -46,7 +46,7 @@ const SALE_STATUS_LABEL: Record<string, string> = {
 };
 
 export default function SellerDashboardPage() {
-  const { user } = useCurrentUser();
+  const { user, loading } = useCurrentUser();
   const [listings, setListings] = useState<MyListing[] | null>(null);
   const [sales, setSales] = useState<MySale[] | null>(null);
   const [error, setError] = useState('');
@@ -106,7 +106,22 @@ export default function SellerDashboardPage() {
 
         {error && <p className="mt-4 text-sm text-coral">{error}</p>}
 
-        {!listings || listings.length === 0 ? (
+        {/* Non connecté : on affiche l'invite de connexion au lieu du vide,
+            sinon l'utilisateur croit que son compte vendeur n'existe pas. */}
+        {!loading && !user ? (
+          <div className="mt-8 rounded-ticket border border-white/10 bg-navy-mid p-10 text-center">
+            <p className="font-display text-lg text-bone">Connectez-vous pour vendre</p>
+            <p className="mt-2 text-sm text-bone/60">
+              Créez votre annonce après vous être connecté à votre compte.
+            </p>
+            <Link
+              href="/login"
+              className="mt-6 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-semibold text-navy-deep hover:bg-gold-soft"
+            >
+              Se connecter
+            </Link>
+          </div>
+        ) : !listings || listings.length === 0 ? (
           <div className="mt-8 rounded-ticket border border-white/10 bg-navy-mid p-10 text-center">
             <p className="font-display text-lg text-bone">Aucune annonce pour l'instant</p>
           </div>
