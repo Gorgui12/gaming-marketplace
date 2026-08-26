@@ -27,3 +27,25 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z
+    .string()
+    .min(10, 'Le mot de passe doit contenir au moins 10 caractères')
+    .regex(/[A-Z]/, 'Doit contenir au moins une majuscule')
+    .regex(/[0-9]/, 'Doit contenir au moins un chiffre'),
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const googleAuthSchema = z.object({
+  idToken: z.string().min(1),
+  country: z.string().length(2).optional(),
+  sessionId: z.string().optional(),
+});
+export type GoogleAuthInput = z.infer<typeof googleAuthSchema>;

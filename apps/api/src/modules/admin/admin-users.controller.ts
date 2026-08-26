@@ -6,6 +6,7 @@ import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { AuditService } from '../audit/audit.service.js';
 import { UserModel } from './admin-stats.models.js';
+import { EmailService } from '../../lib/email/email.service.js';
 
 const USER_SEARCH_MAX = 50;
 
@@ -76,6 +77,14 @@ export const updateUserStatus = asyncHandler(async (req: Request, res: Response)
     entityId: String(user._id),
     metadata: { email: user.email },
   });
+
+  // Notification email
+  const reason = String(req.body?.reason ?? 'Non précisé');
+  if (status === UserAccountStatus.SUSPENDED) {
+    EmailService.sendAccountSuspended({ to: user.email, firstName: user.firstName, reason }).catch(() => {});
+  } else if (status === UserAccountStatus.BANNED) {
+    EmailService.sendAccountBanned({ to: user.email, firstName: user.firstName, reason }).catch(() => {});
+  }
 
   res.status(200).json({
     success: true,

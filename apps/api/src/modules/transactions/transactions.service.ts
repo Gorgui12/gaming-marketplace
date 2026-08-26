@@ -14,6 +14,8 @@ import { AuditService } from '../audit/audit.service.js';
 import { AffiliateCommissionService } from '../affiliates/affiliate-commission.service.js';
 import { AffiliateAttributionService } from '../affiliates/affiliate-attribution.service.js';
 import { PromoCodeService } from '../affiliates/promo-code.service.js';
+import { EmailService } from '../../lib/email/email.service.js';
+import { UserModel } from '../users/user.model.js';
 
 function requireParticipant(
   transaction: { buyer: unknown; seller: unknown },
@@ -22,6 +24,14 @@ function requireParticipant(
   if (String(transaction.buyer) === userId) return 'BUYER';
   if (String(transaction.seller) === userId) return 'SELLER';
   throw AppError.forbidden("Vous n'êtes pas partie prenante de cette transaction");
+}
+
+async function loadParticipants(buyerId: string, sellerId: string) {
+  const [buyer, seller] = await Promise.all([
+    UserModel.findById(buyerId).select('email firstName'),
+    UserModel.findById(sellerId).select('email firstName'),
+  ]);
+  return { buyer, seller };
 }
 
 export class TransactionsService {
@@ -139,6 +149,23 @@ export class TransactionsService {
       entityId: String(transaction._id),
     });
 
+    // Notifications email
+    {
+      const { buyer, seller } = await loadParticipants(input.buyerId, String(listing.seller));
+      const emailData = {
+        transactionId: String(transaction._id),
+        listingTitle: listing.title,
+        amount: netPrice,
+        currency: listing.currency,
+      };
+      if (buyer) {
+        EmailService.sendTransactionCreated({ to: buyer.email, firstName: buyer.firstName, role: 'buyer', ...emailData }).catch(() => {});
+      }
+      if (seller) {
+        EmailService.sendTransactionCreated({ to: seller.email, firstName: seller.firstName, role: 'seller', ...emailData }).catch(() => {});
+      }
+    }
+
     return transaction;
   }
 
@@ -200,6 +227,22 @@ export class TransactionsService {
       entityId: String(transaction._id),
     });
 
+    // Notifications email
+    {
+      const listing = await ListingModel.findById(transaction.listing).select('title');
+      const { buyer, seller } = await loadParticipants(String(transaction.buyer), input.sellerId);
+      const emailData = {
+        transactionId: String(transaction._id),
+        listingTitle: listing?.title ?? 'Annonce',
+      };
+      if (buyer) {
+        EmailService.sendTransactionDelivered({ to: buyer.email, firstName: buyer.firstName, role: 'buyer', ...emailData }).catch(() => {});
+      }
+      if (seller) {
+        EmailService.sendTransactionDelivered({ to: seller.email, firstName: seller.firstName, role: 'seller', ...emailData }).catch(() => {});
+      }
+    }
+
     return transaction;
   }
 
@@ -239,6 +282,25 @@ export class TransactionsService {
       entityType: 'Transaction',
       entityId: String(transaction._id),
     });
+
+    // Notifications email
+    {
+      const listing = await ListingModel.findById(transaction.listing).select('title');
+      const { buyer, seller } = await loadParticipants(input.buyerId, String(transaction.seller));
+      const emailData = {
+        transactionId: String(transaction._id),
+        listingTitle: listing?.title ?? 'Annonce',
+      };
+      if (buyer) {
+        EmailService.sendTransactionCompleted({ to: buyer.email, firstName: buyer.firstName, role: 'buyer', ...emailData }).catch(() => {});
+      }
+      if (seller) {
+        EmailService.sendTransactionCompleted({
+          to: seller.email, firstName: seller.firstName, role: 'seller',
+          ...emailData, sellerAmount: transaction.sellerAmount, currency: transaction.currency,
+        }).catch(() => {});
+      }
+    }
 
     // Note Phase 5: le payout vendeur réel (transfert Mobile Money) est une
     // action applicative distincte à déclencher ici ou en job asynchrone —
@@ -316,6 +378,20 @@ export class TransactionsService {
       metadata: { reason: input.reason },
     });
 
+    // Notification email acheteur
+    {
+      const listing = await ListingModel.findById(transaction.listing).select('title');
+      const buyer = await UserModel.findById(transaction.buyer).select('email firstName');
+      if (buyer) {
+        EmailService.sendTransactionRefunded({
+          to: buyer.email, firstName: buyer.firstName,
+          transactionId: String(transaction._id),
+          listingTitle: listing?.title ?? 'Annonce',
+          reason: input.reason,
+        }).catch(() => {});
+      }
+    }
+
     return transaction;
   }
 
@@ -375,6 +451,20 @@ export class TransactionsService {
       entityId: String(transaction._id),
       metadata: { reason: input.reason },
     });
+
+    // Notification email vendeur
+    {
+      const listing = await ListingModel.findById(transaction.listing).select('title');
+      const seller = await UserModel.findById(transaction.seller).select('email firstName');
+      if (seller) {
+        EmailService.sendTransactionCompleted({
+          to: seller.email, firstName: seller.firstName, role: 'seller',
+          transactionId: String(transaction._id),
+          listingTitle: listing?.title ?? 'Annonce',
+          sellerAmount: transaction.sellerAmount, currency: transaction.currency,
+        }).catch(() => {});
+      }
+    }
 
     return transaction;
   }

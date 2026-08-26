@@ -3,6 +3,8 @@ import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { ListingModel } from './listing.model.js';
 import { AuditService } from '../audit/audit.service.js';
+import { EmailService } from '../../lib/email/email.service.js';
+import { UserModel } from '../users/user.model.js';
 
 export class ListingsModerationService {
   static async listPending() {
@@ -25,6 +27,14 @@ export class ListingsModerationService {
       entityId: listingId,
     });
 
+    // Notification email vendeur
+    const seller = await UserModel.findById(listing.seller).select('email firstName');
+    if (seller) {
+      EmailService.sendListingApproved({
+        to: seller.email, firstName: seller.firstName, listingTitle: listing.title,
+      }).catch(() => {});
+    }
+
     return listing;
   }
 
@@ -45,6 +55,14 @@ export class ListingsModerationService {
       entityId: listingId,
       metadata: { notes },
     });
+
+    // Notification email vendeur
+    const seller = await UserModel.findById(listing.seller).select('email firstName');
+    if (seller) {
+      EmailService.sendListingRejected({
+        to: seller.email, firstName: seller.firstName, listingTitle: listing.title, notes,
+      }).catch(() => {});
+    }
 
     return listing;
   }

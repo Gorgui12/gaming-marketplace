@@ -27,11 +27,13 @@ const envSchema = z.object({
   STORAGE_API_SECRET: z.string().optional(),
   STORAGE_CLOUD_NAME: z.string().optional(),
 
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().optional(),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASSWORD: z.string().optional(),
-  SMTP_FROM: z.string().optional(),
+  SMTP_HOST: z.string().min(1, 'SMTP_HOST est obligatoire'),
+  SMTP_PORT: z.coerce.number().default(465),
+  SMTP_USER: z.string().min(1, 'SMTP_USER est obligatoire'),
+  SMTP_PASSWORD: z.string().min(1, 'SMTP_PASSWORD est obligatoire'),
+  SMTP_FROM: z.string().min(1, 'SMTP_FROM est obligatoire'),
+
+  GOOGLE_CLIENT_ID: z.string().optional(),
 
   CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),

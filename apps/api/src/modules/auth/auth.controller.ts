@@ -1,5 +1,11 @@
 import type { Request, Response } from 'express';
-import { loginSchema, registerSchema } from '@gm/validation';
+import {
+  loginSchema,
+  registerSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  googleAuthSchema,
+} from '@gm/validation';
 import { asyncHandler } from '../../lib/async-handler.js';
 import { AuthService } from './auth.service.js';
 import { createSessionToken } from './session.js';
@@ -45,12 +51,42 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 
 export const logout = asyncHandler(async (_req: Request, res: Response) => {
   const isProduction = env.NODE_ENV === 'production';
-  // Les attributs doivent être identiques à ceux du setSessionCookie,
-  // sinon le navigateur ne supprime pas le cookie (mismatch secure/sameSite).
   res.clearCookie(env.SESSION_COOKIE_NAME, sessionCookieOptions(isProduction));
   res.status(200).json({ success: true, data: null, message: 'Déconnecté' });
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({ success: true, data: req.user ?? null });
+});
+
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  const input = forgotPasswordSchema.parse(req.body);
+  await AuthService.forgotPassword(input);
+  // Toujours retourner 200 pour ne pas révéler si l'email existe
+  res.status(200).json({
+    success: true,
+    data: { message: 'Si un compte existe avec cet email, vous recevrez un lien de réinitialisation.' },
+  });
+});
+
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const input = resetPasswordSchema.parse(req.body);
+  const user = await AuthService.resetPassword(input);
+  const token = createSessionToken(String(user._id), user.roles);
+  setSessionCookie(res, token);
+  res.status(200).json({
+    success: true,
+    data: { id: user._id, email: user.email, username: user.username },
+  });
+});
+
+export const googleAuth = asyncHandler(async (req: Request, res: Response) => {
+  const input = googleAuthSchema.parse(req.body);
+  const user = await AuthService.googleAuth(input);
+  const token = createSessionToken(String(user._id), user.roles);
+  setSessionCookie(res, token);
+  res.status(200).json({
+    success: true,
+    data: { id: user._id, email: user.email, username: user.username },
+  });
 });
