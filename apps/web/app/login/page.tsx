@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { notifyAuthChanged, useCurrentUser } from '@/lib/use-current-user';
@@ -28,7 +29,9 @@ export default function LoginPage() {
   }, [loading, user, router]);
 
   // Charger Google Identity Services
-  useEffect(() => {
+  const [googleReady, setGoogleReady] = useState(false);
+
+  function initGoogleSignIn() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId || !window.google) return;
 
@@ -46,7 +49,13 @@ export default function LoginPage() {
         width: 300,
       });
     }
-  }, []);
+  }
+
+  useEffect(() => {
+    if (googleReady) {
+      initGoogleSignIn();
+    }
+  }, [googleReady]);
 
   async function handleGoogleCredential(response: { credential?: string }) {
     if (!response.credential) return;
@@ -98,6 +107,11 @@ export default function LoginPage() {
 
   return (
     <>
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={() => setGoogleReady(true)}
+      />
       <SiteNav />
       <main className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-5 py-16">
         <h1 className="font-display text-2xl text-bone">Connexion</h1>

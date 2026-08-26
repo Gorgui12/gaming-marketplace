@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Script from 'next/script';
 import Link from 'next/link';
 import { registerSchema } from '@gm/validation';
 import { apiFetch } from '@/lib/api-client';
@@ -41,7 +42,9 @@ export default function RegisterPage() {
   }, [loading, user, router]);
 
   // Charger Google Identity Services
-  useEffect(() => {
+  const [googleReady, setGoogleReady] = useState(false);
+
+  function initGoogleSignUp() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId || !window.google) return;
 
@@ -59,7 +62,13 @@ export default function RegisterPage() {
         width: 300,
       });
     }
-  }, []);
+  }
+
+  useEffect(() => {
+    if (googleReady) {
+      initGoogleSignUp();
+    }
+  }, [googleReady]);
 
   async function handleGoogleCredential(response: { credential?: string }) {
     if (!response.credential) return;
@@ -124,6 +133,11 @@ export default function RegisterPage() {
 
   return (
     <>
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={() => setGoogleReady(true)}
+      />
       <SiteNav />
       <main className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-5 py-16">
         <h1 className="font-display text-2xl text-bone">Créer un compte</h1>
