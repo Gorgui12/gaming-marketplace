@@ -8,6 +8,7 @@ interface AffiliateData {
   affiliateCode: string;
   status: string;
   commissionRate: number;
+  cookieDurationDays: number;
   totalClicks: number;
   totalConversions: number;
   totalRevenue: number;
@@ -100,8 +101,13 @@ export function AffiliateDashboard() {
       {/* Actions principales — visibles immédiatement (§35) */}
       <div className="grid gap-3 sm:grid-cols-2">
         <CopyField label="Votre lien" value={link} />
-        <CopyField label="Votre code promo" value={affiliate.affiliateCode} />
+        <CopyField label="Votre code de parrainage" value={affiliate.affiliateCode} />
       </div>
+      <p className="text-xs text-bone/40">
+        Partagez votre lien : chaque achat effectué dans les {affiliate.cookieDurationDays} jours
+        suivant un clic vous est automatiquement attribué. Votre code de parrainage est la partie
+        unique du lien — pas un code de réduction à part entière.
+      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Clics" value={affiliate.totalClicks.toLocaleString('fr-FR')} />
