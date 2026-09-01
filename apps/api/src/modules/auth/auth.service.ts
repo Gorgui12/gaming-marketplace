@@ -166,6 +166,16 @@ export class AuthService {
     if (!payload?.email) {
       throw new AppError(ErrorCode.INVALID_CREDENTIALS, 'Impossible de récupérer l\'email Google', 401);
     }
+    if (payload.email_verified === false) {
+      // Google indique explicitement que cet email n'est pas vérifié —
+      // ne jamais faire confiance à un email non vérifié pour lier ou
+      // créer un compte (évite un usurpation d'email théorique).
+      throw new AppError(
+        ErrorCode.INVALID_CREDENTIALS,
+        "L'email de ce compte Google n'est pas vérifié",
+        401,
+      );
+    }
 
     const googleId = payload.sub;
     const email = payload.email.toLowerCase();

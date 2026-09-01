@@ -11,6 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/marketplace/efootball`, changeFrequency: 'hourly', priority: 0.9 },
     { url: `${BASE_URL}/marketplace/efootball/senegal`, changeFrequency: 'hourly', priority: 0.95 },
     { url: `${BASE_URL}/affiliate`, changeFrequency: 'weekly', priority: 0.5 },
+    { url: `${BASE_URL}/blog`, changeFrequency: 'daily', priority: 0.6 },
   ];
 
   let listingEntries: MetadataRoute.Sitemap = [];
@@ -26,5 +27,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // valide avec uniquement les pages statiques plutôt que d'échouer.
   }
 
-  return [...staticEntries, ...listingEntries];
+  let blogEntries: MetadataRoute.Sitemap = [];
+  try {
+    const result = await apiFetch<{ items: { slug: string }[] }>('/api/v1/blog?pageSize=50');
+    blogEntries = result.items.map((post) => ({
+      url: `${BASE_URL}/blog/${post.slug}`,
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
+    }));
+  } catch {
+    // idem — pas d'échec du sitemap entier si le blog est indisponible.
+  }
+
+  return [...staticEntries, ...listingEntries, ...blogEntries];
 }

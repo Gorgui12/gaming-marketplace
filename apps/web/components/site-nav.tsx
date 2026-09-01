@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
 import { notifyAuthChanged, useCurrentUser } from '@/lib/use-current-user';
 import { apiFetch } from '@/lib/api-client';
+import { NotificationBell } from './notification-bell';
 
 export function SiteNav() {
   const { user, loading } = useCurrentUser();
@@ -101,6 +102,7 @@ export function SiteNav() {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <NotificationBell enabled={!loading && !!user} />
           {!loading && user && (
             <Link
               href="/dashboard/seller"

@@ -1,4 +1,4 @@
-import { TransactionState, ListingStatus, AccessStatus, AttributionType } from '@gm/types';
+import { TransactionState, ListingStatus, AccessStatus, AttributionType, NotificationType } from '@gm/types';
 import { generatePaymentReference } from '@gm/utils';
 import { computeFee, DEFAULT_FEE_RULE } from '@gm/config';
 import { splitAmount } from '@gm/utils';
@@ -16,6 +16,7 @@ import { AffiliateAttributionService } from '../affiliates/affiliate-attribution
 import { PromoCodeService } from '../affiliates/promo-code.service.js';
 import { EmailService } from '../../lib/email/email.service.js';
 import { UserModel } from '../users/user.model.js';
+import { NotificationService } from '../notifications/notification.service.js';
 
 function requireParticipant(
   transaction: { buyer: unknown; seller: unknown },
@@ -164,6 +165,20 @@ export class TransactionsService {
       if (seller) {
         EmailService.sendTransactionCreated({ to: seller.email, firstName: seller.firstName, role: 'seller', ...emailData }).catch(() => {});
       }
+      NotificationService.create({
+        userId: input.buyerId,
+        type: NotificationType.PAYMENT_RECEIVED,
+        title: 'Commande créée',
+        message: `Votre commande pour "${listing.title}" a été créée.`,
+        metadata: { transactionId: String(transaction._id) },
+      }).catch(() => {});
+      NotificationService.create({
+        userId: String(listing.seller),
+        type: NotificationType.PAYMENT_RECEIVED,
+        title: 'Nouvelle vente',
+        message: `Une commande a été passée pour "${listing.title}".`,
+        metadata: { transactionId: String(transaction._id) },
+      }).catch(() => {});
     }
 
     return transaction;
@@ -241,6 +256,13 @@ export class TransactionsService {
       if (seller) {
         EmailService.sendTransactionDelivered({ to: seller.email, firstName: seller.firstName, role: 'seller', ...emailData }).catch(() => {});
       }
+      NotificationService.create({
+        userId: String(transaction.buyer),
+        type: NotificationType.SELLER_DELIVERED,
+        title: 'Accès livrés',
+        message: `Le vendeur a livré les accès pour "${listing?.title ?? 'votre commande'}". Vérifiez et confirmez.`,
+        metadata: { transactionId: String(transaction._id) },
+      }).catch(() => {});
     }
 
     return transaction;
@@ -300,6 +322,13 @@ export class TransactionsService {
           ...emailData, sellerAmount: transaction.sellerAmount, currency: transaction.currency,
         }).catch(() => {});
       }
+      NotificationService.create({
+        userId: String(transaction.seller),
+        type: NotificationType.TRANSACTION_COMPLETED,
+        title: 'Vente terminée',
+        message: `La vente de "${listing?.title ?? 'votre annonce'}" est terminée. Vous allez être payé.`,
+        metadata: { transactionId: String(transaction._id) },
+      }).catch(() => {});
     }
 
     // Note Phase 5: le payout vendeur réel (transfert Mobile Money) est une
@@ -390,6 +419,13 @@ export class TransactionsService {
           reason: input.reason,
         }).catch(() => {});
       }
+      NotificationService.create({
+        userId: String(transaction.buyer),
+        type: NotificationType.TRANSACTION_COMPLETED,
+        title: 'Remboursement effectué',
+        message: `Votre transaction pour "${listing?.title ?? 'l\'annonce'}" a été remboursée.`,
+        metadata: { transactionId: String(transaction._id), reason: input.reason },
+      }).catch(() => {});
     }
 
     return transaction;

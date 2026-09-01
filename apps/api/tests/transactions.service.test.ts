@@ -27,6 +27,24 @@ vi.mock('../src/modules/affiliates/affiliate-attribution.service.js', () => ({
 vi.mock('../src/modules/affiliates/promo-code.service.js', () => ({
   PromoCodeService: { validateAndApply: vi.fn(), recordUsage: vi.fn() },
 }));
+// UserModel/EmailService: nouveaux appels introduits par les emails
+// transactionnels — mockés pour isoler la logique testée et ne jamais
+// déclencher de vrai envoi SMTP pendant les tests.
+vi.mock('../src/modules/users/user.model.js', () => ({
+  UserModel: {
+    findById: vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({ email: 'test@example.com', firstName: 'Test' }),
+    }),
+  },
+}));
+vi.mock('../src/lib/email/email.service.js', () => ({
+  EmailService: {
+    sendTransactionCreated: vi.fn().mockResolvedValue(undefined),
+    sendTransactionDelivered: vi.fn().mockResolvedValue(undefined),
+    sendTransactionCompleted: vi.fn().mockResolvedValue(undefined),
+    sendTransactionRefunded: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 const { TransactionsService } = await import(
   '../src/modules/transactions/transactions.service.js'

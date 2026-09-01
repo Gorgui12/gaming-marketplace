@@ -5,6 +5,8 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { apiFetch } from '@/lib/api-client';
 import { useCurrentUser } from '@/lib/use-current-user';
+import { ReviewForm } from '@/components/review-form';
+import { TransactionChat } from '@/components/transaction-chat';
 
 interface MyTransaction {
   _id: string;
@@ -39,6 +41,8 @@ export default function BuyerDashboardPage() {
   const [revealedId, setRevealedId] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [loadingAccess, setLoadingAccess] = useState<string | null>(null);
+  const [reviewedTransactionIds, setReviewedTransactionIds] = useState<Set<string>>(new Set());
+  const [showReviewForm, setShowReviewForm] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -72,6 +76,16 @@ export default function BuyerDashboardPage() {
     }
   }
 
+  async function loadMyReviews() {
+    try {
+      const d = await apiFetch<{ reviews: Array<{ transaction: string }> }>('/api/v1/reviews/mine');
+      setReviewedTransactionIds(new Set(d.reviews.map((r) => r.transaction)));
+    } catch {
+      // non bloquant : au pire le formulaire d'avis réapparaît même si déjà
+      // laissé, l'API refuserait alors le doublon proprement.
+    }
+  }
+
   useEffect(() => {
     // Attendre que l'utilisateur soit chargé avant de vérifier les paiements
     // en attente : le filtre ci-dessous compare t.buyer à user.id — lancé
@@ -79,6 +93,7 @@ export default function BuyerDashboardPage() {
     // ne partait jamais (les paiements restaient bloqués en "en attente").
     if (user === undefined) return;
     void load();
+    void loadMyReviews();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -169,6 +184,29 @@ export default function BuyerDashboardPage() {
                   >
                     Confirmer la réception du compte
                   </button>
+                )}
+
+                {t.escrowStatus === 'COMPLETED' && !reviewedTransactionIds.has(t._id) && (
+                  showReviewForm === t._id ? (
+                    <ReviewForm
+                      transactionId={t._id}
+                      onSubmitted={() => {
+                        setReviewedTransactionIds((s) => new Set(s).add(t._id));
+                        setShowReviewForm(null);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setShowReviewForm(t._id)}
+                      className="mt-3 rounded-full border border-gold/40 px-4 py-2 text-xs text-gold hover:bg-gold/10"
+                    >
+                      Laisser un avis
+                    </button>
+                  )
+                )}
+
+                {!['CANCELLED', 'REFUNDED'].includes(t.escrowStatus) && user && (
+                  <TransactionChat transactionId={t._id} currentUserId={user.id} />
                 )}
               </div>
             ))}

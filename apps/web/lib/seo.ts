@@ -106,3 +106,29 @@ export function breadcrumbJsonLd(items: { name: string; url: string }[]) {
     })),
   };
 }
+
+/**
+ * JSON-LD Article — pour les pages du blog (§23, canal d'acquisition
+ * organique).
+ */
+export function articleJsonLd(params: {
+  title: string;
+  description: string;
+  slug: string;
+  coverImage?: string;
+  publishedAt?: string;
+  updatedAt?: string;
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: params.title,
+    description: params.description,
+    image: params.coverImage,
+    datePublished: params.publishedAt,
+    dateModified: params.updatedAt ?? params.publishedAt,
+    author: { '@type': 'Organization', name: SITE_NAME },
+    publisher: { '@type': 'Organization', name: SITE_NAME },
+    mainEntityOfPage: absoluteUrl(`/blog/${params.slug}`),
+  };
+}

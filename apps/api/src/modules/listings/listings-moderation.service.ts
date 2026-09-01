@@ -1,10 +1,11 @@
-import { ListingStatus } from '@gm/types';
+import { ListingStatus, NotificationType } from '@gm/types';
 import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { ListingModel } from './listing.model.js';
 import { AuditService } from '../audit/audit.service.js';
 import { EmailService } from '../../lib/email/email.service.js';
 import { UserModel } from '../users/user.model.js';
+import { NotificationService } from '../notifications/notification.service.js';
 
 export class ListingsModerationService {
   static async listPending() {
@@ -34,6 +35,13 @@ export class ListingsModerationService {
         to: seller.email, firstName: seller.firstName, listingTitle: listing.title,
       }).catch(() => {});
     }
+    NotificationService.create({
+      userId: String(listing.seller),
+      type: NotificationType.LISTING_APPROVED,
+      title: 'Annonce approuvée',
+      message: `Votre annonce "${listing.title}" est désormais publiée.`,
+      metadata: { listingId: String(listing._id) },
+    }).catch(() => {});
 
     return listing;
   }
@@ -63,6 +71,13 @@ export class ListingsModerationService {
         to: seller.email, firstName: seller.firstName, listingTitle: listing.title, notes,
       }).catch(() => {});
     }
+    NotificationService.create({
+      userId: String(listing.seller),
+      type: NotificationType.LISTING_REJECTED,
+      title: 'Annonce refusée',
+      message: `Votre annonce "${listing.title}" n'a pas été approuvée.${notes ? ` Motif : ${notes}` : ''}`,
+      metadata: { listingId: String(listing._id) },
+    }).catch(() => {});
 
     return listing;
   }

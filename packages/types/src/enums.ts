@@ -159,3 +159,20 @@ export const FraudReviewStatus = {
   BLOCKED: 'BLOCKED',
 } as const;
 export type FraudReviewStatus = (typeof FraudReviewStatus)[keyof typeof FraudReviewStatus];
+
+// ==================== NOTIFICATIONS ====================
+
+export const NotificationType = {
+  PAYMENT_RECEIVED: 'PAYMENT_RECEIVED',
+  PAYMENT_CONFIRMED: 'PAYMENT_CONFIRMED',
+  LISTING_APPROVED: 'LISTING_APPROVED',
+  LISTING_REJECTED: 'LISTING_REJECTED',
+  SELLER_DELIVERED: 'SELLER_DELIVERED',
+  BUYER_CONFIRMED: 'BUYER_CONFIRMED',
+  DISPUTE_OPENED: 'DISPUTE_OPENED',
+  DISPUTE_RESOLVED: 'DISPUTE_RESOLVED',
+  TRANSACTION_COMPLETED: 'TRANSACTION_COMPLETED',
+  NEW_MESSAGE: 'NEW_MESSAGE',
+  NEW_REVIEW: 'NEW_REVIEW',
+} as const;
+export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

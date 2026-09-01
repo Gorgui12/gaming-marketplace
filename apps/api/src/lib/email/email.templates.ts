@@ -1,3 +1,20 @@
+/**
+ * Échappe les caractères HTML spéciaux avant interpolation dans un
+ * template email. Toute valeur d'origine utilisateur (firstName,
+ * listingTitle, reason, notes, resolution...) DOIT passer par cette
+ * fonction avant d'être insérée dans le HTML — sinon un utilisateur peut
+ * casser la mise en page ou injecter du balisage arbitraire dans un email
+ * envoyé depuis notre domaine (voir audit sécurité).
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const BASE_STYLE = `
   margin: 0; padding: 0; box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -55,7 +72,7 @@ function wrap(title: string, bodyHtml: string): string {
 export const emailTemplates = {
   welcome(firstName: string) {
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${escapeHtml(firstName)}</strong>,</p>
       <p style="margin:0 0 16px;">Bienvenue sur Gaming Marketplace ! Votre compte a été créé avec succès.</p>
       <p style="margin:0 0 16px;">Vous pouvez maintenant explorer les annonces, acheter ou vendre des comptes de jeux vidéo en toute sécurité.</p>
       <div style="text-align:center;margin:24px 0;">
@@ -68,7 +85,7 @@ export const emailTemplates = {
 
   passwordReset(firstName: string, resetUrl: string) {
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${escapeHtml(firstName)}</strong>,</p>
       <p style="margin:0 0 16px;">Vous avez demandé la réinitialisation de votre mot de passe. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe :</p>
       <div style="text-align:center;margin:24px 0;">
         <a href="${resetUrl}" style="${BUTTON_STYLE}">Réinitialiser mon mot de passe</a>
@@ -87,17 +104,19 @@ export const emailTemplates = {
     currency: string;
   }) {
     const isBuyer = params.role === 'buyer';
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">${isBuyer
-        ? `Votre commande pour <strong>${params.listingTitle}</strong> a été créée. Veuillez procéder au paiement pour finaliser.`
-        : `Une nouvelle commande a été passée pour votre annonce <strong>${params.listingTitle}</strong>.`
+        ? `Votre commande pour <strong>${listingTitle}</strong> a été créée. Veuillez procéder au paiement pour finaliser.`
+        : `Une nouvelle commande a été passée pour votre annonce <strong>${listingTitle}</strong>.`
       }</p>
       <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
         <p style="margin:0;color:#94a3b8;font-size:13px;">Montant</p>
-        <p style="margin:4px 0 0;color:#d4af37;font-size:20px;font-weight:700;">${params.amount.toLocaleString('fr-FR')} ${params.currency}</p>
+        <p style="margin:4px 0 0;color:#d4af37;font-size:20px;font-weight:700;">${params.amount.toLocaleString('fr-FR')} ${escapeHtml(params.currency)}</p>
       </div>
-      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${params.transactionId}</p>
+      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
     `;
     return { subject: isBuyer ? 'Commande créée' : 'Nouvelle commande reçue', html: wrap(isBuyer ? 'Votre commande' : 'Nouvelle vente', body) };
   },
@@ -109,13 +128,15 @@ export const emailTemplates = {
     listingTitle: string;
   }) {
     const isBuyer = params.role === 'buyer';
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">${isBuyer
-        ? `Votre paiement pour <strong>${params.listingTitle}</strong> a été confirmé. Le vendeur va maintenant vous livrer les accès.`
-        : `Le paiement pour la commande <strong>${params.listingTitle}</strong> a été confirmé. Veuillez livrer les accès du compte.`
+        ? `Votre paiement pour <strong>${listingTitle}</strong> a été confirmé. Le vendeur va maintenant vous livrer les accès.`
+        : `Le paiement pour la commande <strong>${listingTitle}</strong> a été confirmé. Veuillez livrer les accès du compte.`
       }</p>
-      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${params.transactionId}</p>
+      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
     `;
     return { subject: 'Paiement confirmé', html: wrap('Paiement confirmé', body) };
   },
@@ -127,13 +148,15 @@ export const emailTemplates = {
     listingTitle: string;
   }) {
     const isBuyer = params.role === 'buyer';
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">${isBuyer
-        ? `Le vendeur a livré les accès pour <strong>${params.listingTitle}</strong>. Vous pouvez consulter les accès depuis votre tableau de bord et les vérifier.`
-        : `Vous avez livré les accès pour <strong>${params.listingTitle}</strong>. L'acheteur est en train de vérifier.`
+        ? `Le vendeur a livré les accès pour <strong>${listingTitle}</strong>. Vous pouvez consulter les accès depuis votre tableau de bord et les vérifier.`
+        : `Vous avez livré les accès pour <strong>${listingTitle}</strong>. L'acheteur est en train de vérifier.`
       }</p>
-      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${params.transactionId}</p>
+      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
     `;
     return { subject: 'Accès livrés', html: wrap('Livraison effectuée', body) };
   },
@@ -147,13 +170,16 @@ export const emailTemplates = {
     currency?: string;
   }) {
     const isBuyer = params.role === 'buyer';
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
+    const currency = params.currency ? escapeHtml(params.currency) : '';
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">${isBuyer
-        ? `La transaction pour <strong>${params.listingTitle}</strong> est terminée. Merci pour votre achat !`
-        : `La transaction pour <strong>${params.listingTitle}</strong> est terminée. ${params.sellerAmount ? `Vous recevrez <strong>${params.sellerAmount.toLocaleString('fr-FR')} ${params.currency}</strong> prochainement.` : ''}`
+        ? `La transaction pour <strong>${listingTitle}</strong> est terminée. Merci pour votre achat !`
+        : `La transaction pour <strong>${listingTitle}</strong> est terminée. ${params.sellerAmount ? `Vous recevrez <strong>${params.sellerAmount.toLocaleString('fr-FR')} ${currency}</strong> prochainement.` : ''}`
       }</p>
-      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${params.transactionId}</p>
+      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
     `;
     return { subject: 'Transaction terminée', html: wrap('Transaction complétée', body) };
   },
@@ -164,22 +190,26 @@ export const emailTemplates = {
     listingTitle: string;
     reason: string;
   }) {
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
-      <p style="margin:0 0 16px;">La transaction pour <strong>${params.listingTitle}</strong> a été remboursée par un administrateur.</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">La transaction pour <strong>${listingTitle}</strong> a été remboursée par un administrateur.</p>
       <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
         <p style="margin:0;color:#94a3b8;font-size:13px;">Raison</p>
-        <p style="margin:4px 0 0;color:#e2e8f0;">${params.reason}</p>
+        <p style="margin:4px 0 0;color:#e2e8f0;">${escapeHtml(params.reason)}</p>
       </div>
-      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${params.transactionId}</p>
+      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
     `;
     return { subject: 'Transaction remboursée', html: wrap('Remboursement', body) };
   },
 
   listingApproved(params: { firstName: string; listingTitle: string }) {
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
-      <p style="margin:0 0 16px;">Votre annonce <strong>${params.listingTitle}</strong> a été approuvée et est désormais visible sur la marketplace.</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Votre annonce <strong>${listingTitle}</strong> a été approuvée et est désormais visible sur la marketplace.</p>
       <div style="text-align:center;margin:24px 0;">
         <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/marketplace" style="${BUTTON_STYLE}">Voir sur la marketplace</a>
       </div>
@@ -188,13 +218,16 @@ export const emailTemplates = {
   },
 
   listingRejected(params: { firstName: string; listingTitle: string; notes?: string }) {
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
+    const notes = params.notes ? escapeHtml(params.notes) : undefined;
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
-      <p style="margin:0 0 16px;">Votre annonce <strong>${params.listingTitle}</strong> n'a pas été approuvée.</p>
-      ${params.notes ? `
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Votre annonce <strong>${listingTitle}</strong> n'a pas été approuvée.</p>
+      ${notes ? `
       <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
         <p style="margin:0;color:#94a3b8;font-size:13px;">Motif</p>
-        <p style="margin:4px 0 0;color:#e2e8f0;">${params.notes}</p>
+        <p style="margin:4px 0 0;color:#e2e8f0;">${notes}</p>
       </div>` : ''}
       <p style="margin:0;color:#94a3b8;font-size:13px;">Vous pouvez modifier votre annonce et la soumettre à nouveau.</p>
     `;
@@ -202,12 +235,13 @@ export const emailTemplates = {
   },
 
   accountSuspended(params: { firstName: string; reason: string }) {
+    const firstName = escapeHtml(params.firstName);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">Votre compte a été suspendu par un administrateur.</p>
       <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
         <p style="margin:0;color:#94a3b8;font-size:13px;">Raison</p>
-        <p style="margin:4px 0 0;color:#e2e8f0;">${params.reason}</p>
+        <p style="margin:4px 0 0;color:#e2e8f0;">${escapeHtml(params.reason)}</p>
       </div>
       <p style="margin:0;color:#94a3b8;font-size:13px;">Si vous pensez qu'il s'agit d'une erreur, contactez support@gamingmarket.store</p>
     `;
@@ -215,12 +249,13 @@ export const emailTemplates = {
   },
 
   accountBanned(params: { firstName: string; reason: string }) {
+    const firstName = escapeHtml(params.firstName);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">Votre compte a été définitivement fermé par un administrateur.</p>
       <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
         <p style="margin:0;color:#94a3b8;font-size:13px;">Raison</p>
-        <p style="margin:4px 0 0;color:#e2e8f0;">${params.reason}</p>
+        <p style="margin:4px 0 0;color:#e2e8f0;">${escapeHtml(params.reason)}</p>
       </div>
     `;
     return { subject: 'Compte fermé', html: wrap('Compte fermé', body) };
@@ -232,12 +267,13 @@ export const emailTemplates = {
     transactionId: string;
     resolution: string;
   }) {
+    const firstName = escapeHtml(params.firstName);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
-      <p style="margin:0 0 16px;">Le litige pour la transaction <strong>${params.transactionId}</strong> a été résolu.</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Le litige pour la transaction <strong>${escapeHtml(params.transactionId)}</strong> a été résolu.</p>
       <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
         <p style="margin:0;color:#94a3b8;font-size:13px;">Décision</p>
-        <p style="margin:4px 0 0;color:#e2e8f0;">${params.resolution}</p>
+        <p style="margin:4px 0 0;color:#e2e8f0;">${escapeHtml(params.resolution)}</p>
       </div>
     `;
     return { subject: 'Litige résolu', html: wrap('Litige résolu', body) };
@@ -245,8 +281,9 @@ export const emailTemplates = {
 
   sellerStatusChanged(params: { firstName: string; status: string }) {
     const isApproved = params.status === 'VERIFIED';
+    const firstName = escapeHtml(params.firstName);
     const body = `
-      <p style="margin:0 0 16px;">Bonjour <strong>${params.firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">${isApproved
         ? 'Félicitations ! Votre compte vendeur a été vérifié. Vous pouvez désormais publier des annonces.'
         : 'Votre demande de vérification vendeur a été rejetée. Vous pouvez soumettre une nouvelle demande.'

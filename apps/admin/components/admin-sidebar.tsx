@@ -12,6 +12,7 @@ import {
   ClipboardList,
   Scale,
   ArrowLeftRight,
+  Newspaper,
   LogOut,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/disputes', label: 'Litiges', icon: Scale },
   { href: '/users', label: 'Utilisateurs', icon: Users },
+  { href: '/blog', label: 'Blog', icon: Newspaper },
   { href: '/affiliates', label: 'Affiliés', icon: Users },
   { href: '/promo-codes', label: 'Codes promo', icon: Ticket },
   { href: '/affiliate-campaigns', label: 'Campagnes', icon: Megaphone },

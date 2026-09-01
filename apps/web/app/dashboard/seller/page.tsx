@@ -6,6 +6,7 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { apiFetch } from '@/lib/api-client';
 import { useCurrentUser } from '@/lib/use-current-user';
+import { TransactionChat } from '@/components/transaction-chat';
 
 interface MyListing {
   _id: string;
@@ -196,6 +197,10 @@ export default function SellerDashboardPage() {
                       Livrer les accès du compte
                     </button>
                   )
+                )}
+
+                {!['CANCELLED', 'REFUNDED'].includes(s.escrowStatus) && user && (
+                  <TransactionChat transactionId={s._id} currentUserId={user.id} />
                 )}
               </div>
             ))}

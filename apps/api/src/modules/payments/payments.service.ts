@@ -165,9 +165,11 @@ export class PaymentService {
 
   /**
    * Logique partagée IPN / vérification active: applique un statut provider
-   * sur une transaction en PAYMENT_PENDING. Idempotente par construction —
-   * une transaction déjà avancée (par l'IPN ou par un sync concurrent) est
-   * ignorée sans erreur.
+   * sur une transaction en PAYMENT_PENDING. Idempotente ET atomique — le
+   * verrou est posé par MongoDB lui-même via findOneAndUpdate filtré sur
+   * escrowStatus, pas par une lecture-puis-écriture en mémoire. Ça empêche
+   * un IPN et une vérification active (ou deux appels concurrents) de
+   * progresser tous les deux la state machine en parallèle.
    */
   private static async applyPaymentConfirmation(
     transaction: HydratedDocument<TransactionDocument>,
@@ -179,55 +181,70 @@ export class PaymentService {
       return;
     }
 
-    if (transaction.escrowStatus !== TransactionState.PAYMENT_PENDING) {
-      // Déjà traité par l'IPN ou un sync précédent (sécurité supplémentaire
-      // au-delà de l'index unique providerEventId).
+    // Verrou atomique: seul l'appelant qui matche encore PAYMENT_PENDING au
+    // moment exact de l'update MongoDB gagne la course. L'autre appelant
+    // concurrent (IPN vs vérification active, ou deux syncs simultanés)
+    // reçoit `null` et s'arrête proprement sans rien modifier.
+    const locked = await TransactionModel.findOneAndUpdate(
+      { _id: transaction._id, escrowStatus: TransactionState.PAYMENT_PENDING },
+      {
+        $set: {
+          paymentStatus: PaymentStatus.CONFIRMED,
+          escrowStatus: TransactionState.PAYMENT_CONFIRMED,
+        },
+        $push: {
+          stateHistory: {
+            from: TransactionState.PAYMENT_PENDING,
+            to: TransactionState.PAYMENT_CONFIRMED,
+            at: new Date(),
+            actor: 'SYSTEM',
+          },
+        },
+      },
+      { new: true },
+    );
+
+    if (!locked) {
+      // Un autre appel a déjà gagné la course (sécurité supplémentaire
+      // au-delà de l'index unique providerEventId côté IPN).
       logger.info(
-        { transactionId: transaction._id, currentStatus: transaction.escrowStatus },
-        'Statut provider ignoré: transaction déjà avancée',
+        { transactionId: transaction._id },
+        'Statut provider ignoré: transaction déjà avancée par un autre appel concurrent',
       );
       return;
     }
 
-    transaction.paymentStatus = PaymentStatus.CONFIRMED;
-    transaction.stateHistory.push({
-      from: transaction.escrowStatus,
-      to: TransactionState.PAYMENT_CONFIRMED,
-      at: new Date(),
-      actor: 'SYSTEM',
-    });
-    transaction.escrowStatus = TransactionState.PAYMENT_CONFIRMED;
-    await transaction.save();
-
     // Transition immédiate vers ESCROW_ACTIVE: à ce stade la plateforme a
     // reçu le paiement (statut logique de séquestre — voir docs/PAYMENTS.md).
-    transaction.stateHistory.push({
-      from: transaction.escrowStatus,
+    // Pas de risque de concurrence ici: seul l'appelant qui a gagné le
+    // verrou ci-dessus atteint cette ligne.
+    locked.stateHistory.push({
+      from: TransactionState.PAYMENT_CONFIRMED,
       to: TransactionState.ESCROW_ACTIVE,
       at: new Date(),
       actor: 'SYSTEM',
     });
-    transaction.escrowStatus = TransactionState.ESCROW_ACTIVE;
-    await transaction.save();
+    locked.escrowStatus = TransactionState.ESCROW_ACTIVE;
+    await locked.save();
 
     // §31 — hook affiliation: strictement après la confirmation du
     // paiement, découplé du PaymentProvider (§37). Ne fait rien si la
     // transaction n'a pas d'attribution résolue au checkout.
-    if (transaction.attributedAffiliate) {
+    if (locked.attributedAffiliate) {
       await AffiliateCommissionService.createConversionIfAttributed(
         {
-          _id: transaction._id,
-          buyer: transaction.buyer,
-          amount: transaction.amount,
-          sellerAmount: transaction.sellerAmount,
-          platformFee: transaction.platformFee,
-          currency: transaction.currency,
+          _id: locked._id,
+          buyer: locked.buyer,
+          amount: locked.amount,
+          sellerAmount: locked.sellerAmount,
+          platformFee: locked.platformFee,
+          currency: locked.currency,
         },
         {
-          affiliateId: String(transaction.attributedAffiliate),
-          attributionType: transaction.attributionType as AttributionType,
-          promoCode: transaction.appliedPromoCode ?? undefined,
-          discountAmount: transaction.discountAmount ?? undefined,
+          affiliateId: String(locked.attributedAffiliate),
+          attributionType: locked.attributionType as AttributionType,
+          promoCode: locked.appliedPromoCode ?? undefined,
+          discountAmount: locked.discountAmount ?? undefined,
         },
       );
     }

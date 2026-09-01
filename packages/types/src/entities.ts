@@ -16,6 +16,7 @@ import type {
   AffiliatePayoutStatus,
   DiscountType,
   FraudReviewStatus,
+  NotificationType,
 } from './enums.js';
 
 export type ObjectIdLike = string;
@@ -182,6 +183,51 @@ export interface Review {
   rating: number; // 1..5
   comment?: string;
   createdAt: string;
+}
+
+export interface Notification {
+  _id: ObjectIdLike;
+  user: ObjectIdLike;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface Conversation {
+  _id: ObjectIdLike;
+  transaction: ObjectIdLike;
+  participants: ObjectIdLike[];
+  createdAt: string;
+}
+
+export interface Message {
+  _id: ObjectIdLike;
+  conversation: ObjectIdLike;
+  sender: ObjectIdLike;
+  content: string;
+  flaggedForContactInfo: boolean;
+  createdAt: string;
+}
+
+export interface Post {
+  _id: ObjectIdLike;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  coverImage?: string;
+  author: ObjectIdLike;
+  category: string;
+  tags: string[];
+  seoTitle?: string;
+  seoDescription?: string;
+  published: boolean;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PlatformSettings {

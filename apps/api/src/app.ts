@@ -21,6 +21,12 @@ import { adminGamesRouter } from './modules/games/admin-games.routes.js';
 import { gamesRouter } from './modules/games/games.routes.js';
 import { adminListingsRouter } from './modules/listings/admin-listings.routes.js';
 import { uploadsRouter } from './modules/uploads/uploads.routes.js';
+import { notificationsRouter } from './modules/notifications/notifications.routes.js';
+import { reviewsRouter } from './modules/reviews/reviews.routes.js';
+import { usersRouter } from './modules/users/users.routes.js';
+import { messagingRouter } from './modules/messaging/messaging.routes.js';
+import { blogRouter } from './modules/blog/blog.routes.js';
+import { adminBlogRouter } from './modules/blog/admin-blog.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -61,6 +67,12 @@ export function createApp(): Express {
   app.use('/api/v1/admin', adminGamesRouter);
   app.use('/api/v1/admin', adminListingsRouter);
   app.use('/api/v1/uploads', uploadsRouter);
+  app.use('/api/v1/notifications', notificationsRouter);
+  app.use('/api/v1/reviews', reviewsRouter);
+  app.use('/api/v1/users', usersRouter);
+  app.use('/api/v1/conversations', messagingRouter);
+  app.use('/api/v1/blog', blogRouter);
+  app.use('/api/v1/admin', adminBlogRouter);
 
   app.use(errorHandlerMiddleware);
 
