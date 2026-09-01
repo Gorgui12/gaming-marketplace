@@ -13,6 +13,7 @@ import {
   Scale,
   ArrowLeftRight,
   Newspaper,
+  Database,
   LogOut,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { href: '/promo-codes', label: 'Codes promo', icon: Ticket },
   { href: '/affiliate-campaigns', label: 'Campagnes', icon: Megaphone },
   { href: '/affiliate-payouts', label: 'Paiements affiliés', icon: Wallet },
+  { href: '/database', label: 'Base de données', icon: Database },
 ];
 
 export function AdminSidebar() {

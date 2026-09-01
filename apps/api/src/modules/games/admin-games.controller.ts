@@ -4,6 +4,7 @@ import { asyncHandler } from '../../lib/async-handler.js';
 import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { GameModel } from './game.model.js';
+import { ListingModel } from '../listings/listing.model.js';
 import { AuditService } from '../audit/audit.service.js';
 
 export const listGamesAdmin = asyncHandler(async (_req: Request, res: Response) => {
@@ -57,4 +58,31 @@ export const updateGameAdmin = asyncHandler(async (req: Request, res: Response) 
   });
 
   res.status(200).json({ success: true, data: { game } });
+});
+
+export const deleteGameAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const game = await GameModel.findById(req.params.id);
+  if (!game) {
+    throw AppError.notFound(ErrorCode.NOT_FOUND, 'Jeu introuvable');
+  }
+
+  const listingsCount = await ListingModel.countDocuments({ game: game._id });
+  if (listingsCount > 0) {
+    throw AppError.conflict(
+      ErrorCode.CONFLICT,
+      `Impossible de supprimer ce jeu : ${listingsCount} annonce(s) y font référence. Supprimez ou déplacez ces annonces d'abord.`,
+    );
+  }
+
+  await GameModel.deleteOne({ _id: game._id });
+
+  await AuditService.log({
+    actor: req.user!.id,
+    action: 'admin.game_deleted',
+    entityType: 'Game',
+    entityId: String(game._id),
+    metadata: { name: game.name, slug: game.slug },
+  });
+
+  res.status(200).json({ success: true, data: { id: game._id, name: game.name } });
 });

@@ -12,6 +12,7 @@ interface Game {
   marketplaceEnabled: boolean;
   termsStatus: string;
   termsNotes?: string;
+  listingsCount?: number;
 }
 
 const TERMS_STATUS_OPTIONS = ['UNREVIEWED', 'ALLOWED', 'RESTRICTED', 'DISABLED'];
@@ -68,6 +69,22 @@ export default function AdminGamesPage() {
     setError('');
     try {
       await apiFetch(`/api/v1/admin/games/${id}`, { method: 'PATCH', json: patch });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function remove(game: Game) {
+    if (!window.confirm(`Supprimer définitivement le jeu « ${game.name} » ?`)) {
+      return;
+    }
+    setBusyId(game._id);
+    setError('');
+    try {
+      await apiFetch(`/api/v1/admin/games/${game._id}`, { method: 'DELETE' });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
@@ -137,6 +154,7 @@ export default function AdminGamesPage() {
                 <th className="px-4 py-3">Vente activée</th>
                 <th className="px-4 py-3">Statut CGU</th>
                 <th className="px-4 py-3">Notes</th>
+                <th className="px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -186,6 +204,17 @@ export default function AdminGamesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 max-w-xs text-xs text-bone/50">{g.termsNotes ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        disabled={busyId === g._id}
+                        onClick={() => remove(g)}
+                        className="rounded-full bg-coral/15 px-3 py-1 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
