@@ -112,6 +112,11 @@ export class EmailService {
     await this.send(params.to, subject, html);
   }
 
+  static async sendListingRemoved(params: { to: string; firstName: string; listingTitle: string }) {
+    const { subject, html } = emailTemplates.listingRemoved(params);
+    await this.send(params.to, subject, html);
+  }
+
   static async sendAccountSuspended(params: { to: string; firstName: string; reason: string }) {
     const { subject, html } = emailTemplates.accountSuspended(params);
     await this.send(params.to, subject, html);

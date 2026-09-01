@@ -234,6 +234,20 @@ export const emailTemplates = {
     return { subject: 'Annonce refusée', html: wrap('Annonce non approuvée', body) };
   },
 
+  listingRemoved(params: { firstName: string; listingTitle: string }) {
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
+    const body = `
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Votre annonce <strong>${listingTitle}</strong> a été supprimée par un administrateur et n'est plus disponible sur la marketplace.</p>
+      <p style="margin:0 0 16px;">Vous pouvez créer une nouvelle annonce à tout moment si la suppression vous semble être une erreur.</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/seller/listings/new" style="${BUTTON_STYLE}">Créer une annonce</a>
+      </div>
+    `;
+    return { subject: 'Annonce supprimée', html: wrap('Annonce supprimée', body) };
+  },
+
   accountSuspended(params: { firstName: string; reason: string }) {
     const firstName = escapeHtml(params.firstName);
     const body = `
