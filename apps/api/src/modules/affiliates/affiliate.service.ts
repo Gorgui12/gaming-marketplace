@@ -140,6 +140,9 @@ export class AffiliateService {
   static async listForAdmin(filter: { status?: string }) {
     const query: Record<string, unknown> = {};
     if (filter.status) query.status = filter.status;
-    return AffiliateModel.find(query).sort({ createdAt: -1 }).limit(200);
+    return AffiliateModel.find(query)
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate('user', 'email firstName lastName username country');
   }
 }

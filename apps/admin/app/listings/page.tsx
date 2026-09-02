@@ -19,12 +19,20 @@ interface Listing {
   _id: string;
   title: string;
   slug: string;
+  description: string;
   price: number;
   currency: string;
   country: string;
   status: string;
   moderationStatus: string;
   moderationNotes?: string;
+  screenshots: string[];
+  playerCount?: number;
+  teamStrength?: number;
+  epicPlayers?: string[];
+  showTimePlayers?: string[];
+  featuredPlayers?: string[];
+  accountMetadata?: Record<string, unknown>;
   views: number;
   createdAt: string;
   seller: SellerRef | null;
@@ -58,6 +66,7 @@ export default function AdminListingsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [detailListing, setDetailListing] = useState<Listing | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -91,6 +100,7 @@ export default function AdminListingsPage() {
     try {
       await action(id);
       await load();
+      if (detailListing?._id === id) setDetailListing(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
     } finally {
@@ -198,6 +208,7 @@ export default function AdminListingsPage() {
                         'Supprimer définitivement cette annonce ?',
                       )
                     }
+                    onViewDetails={() => setDetailListing(l)}
                     sellerLabel={sellerLabel(l)}
                   />
                 ))}
@@ -206,6 +217,45 @@ export default function AdminListingsPage() {
           </div>
           <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
         </>
+      )}
+
+      {detailListing && (
+        <ListingDetailPanel
+          listing={detailListing}
+          sellerLabel={sellerLabel(detailListing)}
+          onClose={() => setDetailListing(null)}
+          busy={busyId === detailListing._id}
+          onApprove={() => {
+            run(
+              (id) => apiFetch(`/api/v1/admin/listings/${id}/approve`, { method: 'POST' }),
+              detailListing._id,
+            );
+          }}
+          onReject={() => {
+            setRejectingId(detailListing._id);
+            setNotes(detailListing.moderationNotes ?? '');
+            setDetailListing(null);
+          }}
+          onPublish={() => {
+            run(
+              (id) => apiFetch(`/api/v1/admin/listings/${id}/publish`, { method: 'POST' }),
+              detailListing._id,
+            );
+          }}
+          onUnpublish={() => {
+            run(
+              (id) => apiFetch(`/api/v1/admin/listings/${id}/unpublish`, { method: 'POST' }),
+              detailListing._id,
+            );
+          }}
+          onDelete={() => {
+            run(
+              (id) => apiFetch(`/api/v1/admin/listings/${id}`, { method: 'DELETE' }),
+              detailListing._id,
+              'Supprimer définitivement cette annonce ?',
+            );
+          }}
+        />
       )}
     </AdminShell>
   );
@@ -223,6 +273,7 @@ function ListingRow({
   onPublish,
   onUnpublish,
   onDelete,
+  onViewDetails,
   sellerLabel,
 }: {
   listing: Listing;
@@ -236,6 +287,7 @@ function ListingRow({
   onPublish: () => void;
   onUnpublish: () => void;
   onDelete: () => void;
+  onViewDetails: () => void;
   sellerLabel: string;
 }) {
   const canModerate = l.status === 'PENDING_REVIEW';
@@ -268,6 +320,13 @@ function ListingRow({
         <td className="px-4 py-3 text-bone/50">{dateFmt.format(new Date(l.createdAt))}</td>
         <td className="px-4 py-3">
           <div className="flex flex-wrap gap-2">
+            <button
+              disabled={busy}
+              onClick={onViewDetails}
+              className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30 disabled:opacity-50"
+            >
+              Détails
+            </button>
             {canModerate && (
               <>
                 <button
@@ -313,24 +372,310 @@ function ListingRow({
             </button>
           </div>
           {rejecting && (
-            <div className="mt-2 flex max-w-md gap-2">
-              <input
-                placeholder="Raison du rejet (optionnel)"
+            <div className="mt-2 max-w-md space-y-2">
+              <textarea
+                autoFocus
+                rows={2}
+                placeholder="Motif du rejet (visible par le vendeur)"
                 value={notes}
                 onChange={(e) => onNotesChange(e.target.value)}
-                className="flex-1 rounded-lg border border-white/10 bg-navy-deep px-3 py-1.5 text-xs text-bone outline-none focus:border-gold"
+                className="w-full resize-none rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-xs text-bone outline-none focus:border-gold"
               />
-              <button
-                disabled={busy}
-                onClick={onReject}
-                className="rounded-full bg-coral/15 px-3 py-1.5 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
-              >
-                Confirmer
-              </button>
+              <div className="flex gap-2">
+                <button
+                  disabled={busy}
+                  onClick={onReject}
+                  className="rounded-full bg-coral/15 px-3 py-1.5 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
+                >
+                  Confirmer le rejet
+                </button>
+                <button
+                  onClick={onToggleReject}
+                  className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-bone/60 hover:border-white/30"
+                >
+                  Annuler
+                </button>
+              </div>
             </div>
           )}
         </td>
       </tr>
     </>
+  );
+}
+
+function ListingDetailPanel({
+  listing: l,
+  sellerLabel,
+  onClose,
+  busy,
+  onApprove,
+  onReject,
+  onPublish,
+  onUnpublish,
+  onDelete,
+}: {
+  listing: Listing;
+  sellerLabel: string;
+  onClose: () => void;
+  busy: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onPublish: () => void;
+  onUnpublish: () => void;
+  onDelete: () => void;
+}) {
+  const [activeImg, setActiveImg] = useState(0);
+  const canModerate = l.status === 'PENDING_REVIEW';
+  const canUnpublish = l.status === 'PUBLISHED' || l.status === 'RESERVED';
+  const canPublish =
+    l.status === 'REJECTED' || l.status === 'SUSPENDED' || l.status === 'DRAFT' || l.status === 'ARCHIVED';
+
+  const metaEntries = l.accountMetadata
+    ? Object.entries(l.accountMetadata).filter(([, v]) => v !== null && v !== undefined && v !== '')
+    : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div
+        className="relative flex h-full w-full max-w-2xl flex-col overflow-y-auto bg-navy-deep shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-navy-deep px-6 py-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-lg text-bone truncate">{l.title}</h2>
+            <p className="font-mono text-xs text-bone/30">/{l.slug}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-4 rounded-full border border-white/15 px-3 py-1.5 text-xs text-bone/60 hover:border-white/30"
+          >
+            Fermer
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-6 px-6 py-5">
+          {/* Screenshots */}
+          {l.screenshots.length > 0 && (
+            <div>
+              <SectionTitle>Screenshots ({l.screenshots.length})</SectionTitle>
+              <div className="mt-2 overflow-hidden rounded-lg border border-white/10">
+                <img
+                  src={l.screenshots[activeImg]}
+                  alt={`Screenshot ${activeImg + 1}`}
+                  className="w-full object-contain bg-black/30"
+                  style={{ maxHeight: 360 }}
+                />
+              </div>
+              {l.screenshots.length > 1 && (
+                <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                  {l.screenshots.map((src, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveImg(i)}
+                      className={`shrink-0 overflow-hidden rounded border-2 ${
+                        i === activeImg ? 'border-gold' : 'border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      <img src={src} alt="" className="h-14 w-20 object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {l.screenshots.length === 0 && (
+            <div>
+              <SectionTitle>Screenshots</SectionTitle>
+              <p className="mt-2 text-xs text-bone/40">Aucun screenshot</p>
+            </div>
+          )}
+
+          {/* Description */}
+          <div>
+            <SectionTitle>Description</SectionTitle>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-bone/80">{l.description}</p>
+          </div>
+
+          {/* Infos générales */}
+          <div>
+            <SectionTitle>Informations</SectionTitle>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <InfoBox label="Jeu" value={l.game?.title ?? '—'} />
+              <InfoBox label="Prix" value={`${l.price.toLocaleString('fr-FR')} ${l.currency}`} tone="gold" />
+              <InfoBox label="Pays" value={l.country} />
+              <InfoBox label="Statut" value={l.status} badge />
+              <InfoBox label="Vues" value={String(l.views)} />
+              <InfoBox label="Créée le" value={dateFmt.format(new Date(l.createdAt))} />
+              {l.playerCount !== undefined && l.playerCount !== null && (
+                <InfoBox label="Nombre de joueurs" value={String(l.playerCount)} />
+              )}
+              {l.teamStrength !== undefined && l.teamStrength !== null && (
+                <InfoBox label="Force d'équipe" value={String(l.teamStrength)} />
+              )}
+            </div>
+          </div>
+
+          {/* Vendeur */}
+          <div>
+            <SectionTitle>Vendeur</SectionTitle>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <InfoBox label="Nom" value={sellerLabel} />
+              {l.seller?.email && <InfoBox label="Email" value={l.seller.email} />}
+              {l.seller?.username && <InfoBox label="Username" value={`@${l.seller.username}`} />}
+              <InfoBox label="Pays" value={l.country} />
+            </div>
+          </div>
+
+          {/* Players lists */}
+          {(l.epicPlayers?.length ?? 0) > 0 && (
+            <div>
+              <SectionTitle>Joueurs Epic ({l.epicPlayers!.length})</SectionTitle>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {l.epicPlayers!.map((p, i) => (
+                  <span key={i} className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-bone/70">{p}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(l.showTimePlayers?.length ?? 0) > 0 && (
+            <div>
+              <SectionTitle>Joueurs ShowTime ({l.showTimePlayers!.length})</SectionTitle>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {l.showTimePlayers!.map((p, i) => (
+                  <span key={i} className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-bone/70">{p}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(l.featuredPlayers?.length ?? 0) > 0 && (
+            <div>
+              <SectionTitle>Joueurs Featured ({l.featuredPlayers!.length})</SectionTitle>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {l.featuredPlayers!.map((p, i) => (
+                  <span key={i} className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-bone/70">{p}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Metadata du compte */}
+          {metaEntries.length > 0 && (
+            <div>
+              <SectionTitle>Métadonnées du compte</SectionTitle>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {metaEntries.map(([k, v]) => (
+                  <div key={k} className="rounded-lg bg-navy-mid px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-bone/40">{k}</p>
+                    <p className="mt-0.5 text-sm text-bone/80 truncate" title={String(v)}>
+                      {typeof v === 'boolean' ? (v ? 'Oui' : 'Non') : String(v)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Motif de rejet existant */}
+          {l.moderationNotes && (
+            <div>
+              <SectionTitle>Motif de rejet</SectionTitle>
+              <p className="mt-2 rounded-lg bg-coral/5 border border-coral/10 px-3 py-2 text-sm text-coral/80">
+                {l.moderationNotes}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Actions footer */}
+        <div className="sticky bottom-0 border-t border-white/10 bg-navy-deep px-6 py-4">
+          <div className="flex flex-wrap gap-2">
+            {canModerate && (
+              <>
+                <button
+                  disabled={busy}
+                  onClick={onApprove}
+                  className="rounded-full bg-mint/15 px-4 py-2 text-sm text-mint hover:bg-mint/25 disabled:opacity-50"
+                >
+                  Approuver
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={onReject}
+                  className="rounded-full bg-coral/15 px-4 py-2 text-sm text-coral hover:bg-coral/25 disabled:opacity-50"
+                >
+                  Rejeter
+                </button>
+              </>
+            )}
+            {canPublish && (
+              <button
+                disabled={busy}
+                onClick={onPublish}
+                className="rounded-full bg-mint/15 px-4 py-2 text-sm text-mint hover:bg-mint/25 disabled:opacity-50"
+              >
+                Publier
+              </button>
+            )}
+            {canUnpublish && (
+              <button
+                disabled={busy}
+                onClick={onUnpublish}
+                className="rounded-full bg-gold/15 px-4 py-2 text-sm text-gold hover:bg-gold/25 disabled:opacity-50"
+              >
+                Masquer
+              </button>
+            )}
+            <button
+              disabled={busy}
+              onClick={onDelete}
+              className="rounded-full bg-coral/15 px-4 py-2 text-sm text-coral hover:bg-coral/25 disabled:opacity-50"
+            >
+              Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wide text-bone/40">{children}</p>
+  );
+}
+
+function InfoBox({
+  label,
+  value,
+  tone,
+  badge,
+}: {
+  label: string;
+  value: string;
+  tone?: 'gold';
+  badge?: boolean;
+}) {
+  if (badge) {
+    return (
+      <div className="rounded-lg bg-navy-mid px-3 py-2">
+        <p className="text-[10px] uppercase tracking-wide text-bone/40">{label}</p>
+        <div className="mt-1">
+          <StatusBadge status={value} />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg bg-navy-mid px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-bone/40">{label}</p>
+      <p className={`mt-0.5 text-sm ${tone === 'gold' ? 'text-gold font-mono' : 'text-bone/80'}`}>{value}</p>
+    </div>
   );
 }

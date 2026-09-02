@@ -4,16 +4,28 @@ import { useEffect, useState, useCallback } from 'react';
 import { AdminShell } from '@/components/admin-shell';
 import { apiFetch } from '@/lib/api-client';
 
+interface AffiliateUser {
+  email: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+  country: string;
+}
+
 interface Affiliate {
   _id: string;
   affiliateCode: string;
   displayName: string;
+  description?: string;
   status: string;
   commissionRate: number;
   totalClicks: number;
   totalConversions: number;
   totalRevenue: number;
+  totalCommission: number;
   fraudReviewStatus: string;
+  user?: AffiliateUser;
+  createdAt: string;
 }
 
 const STATUS_FILTERS = ['ALL', 'PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'TERMINATED'];
@@ -35,6 +47,9 @@ export default function AdminAffiliatesPage() {
   const [filter, setFilter] = useState('PENDING');
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectNotes, setRejectNotes] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError('');
@@ -51,13 +66,16 @@ export default function AdminAffiliatesPage() {
     load();
   }, [load]);
 
-  async function review(id: string, decision: 'APPROVE' | 'REJECT') {
+  async function review(id: string, decision: 'APPROVE' | 'REJECT', notes?: string) {
     setBusyId(id);
+    setError('');
     try {
       await apiFetch(`/api/v1/admin/affiliates/${id}/review`, {
         method: 'POST',
-        json: { decision },
+        json: { decision, notes },
       });
+      setRejectingId(null);
+      setRejectNotes('');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
@@ -76,6 +94,11 @@ export default function AdminAffiliatesPage() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  function userLabel(a: Affiliate): string {
+    if (!a.user) return a.displayName;
+    return a.user.username || a.user.email || [a.user.firstName, a.user.lastName].filter(Boolean).join(' ') || a.displayName;
   }
 
   return (
@@ -103,78 +126,197 @@ export default function AdminAffiliatesPage() {
       ) : affiliates.length === 0 ? (
         <p className="text-sm text-bone/50">Aucun affilié dans ce filtre.</p>
       ) : (
-        <div className="overflow-hidden rounded-ticket border border-white/10">
-          <table className="text-sm">
-            <thead className="bg-navy-mid text-left text-xs uppercase tracking-wide text-bone/50">
-              <tr>
-                <th className="px-4 py-3">Nom</th>
-                <th className="px-4 py-3">Code</th>
-                <th className="px-4 py-3">Statut</th>
-                <th className="px-4 py-3">Taux</th>
-                <th className="px-4 py-3">Clics</th>
-                <th className="px-4 py-3">Conversions</th>
-                <th className="px-4 py-3">Fraude</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {affiliates.map((a) => (
-                <tr key={a._id} className="border-t border-white/5">
-                  <td className="px-4 py-3">{a.displayName}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-bone/70">{a.affiliateCode}</td>
-                  <td className="px-4 py-3">
+        <div className="space-y-2">
+          {affiliates.map((a) => {
+            const isExpanded = expandedId === a._id;
+            return (
+              <div key={a._id} className="overflow-hidden rounded-ticket border border-white/10">
+                {/* Ligne principale */}
+                <div className="flex flex-wrap items-center gap-4 bg-navy-mid px-4 py-3 text-sm">
+                  <div className="min-w-[140px] flex-1">
+                    <p className="text-bone font-medium">{a.displayName}</p>
+                    <p className="font-mono text-xs text-bone/40">{a.affiliateCode}</p>
+                  </div>
+
+                  <div className="hidden min-w-[160px] sm:block">
+                    {a.user ? (
+                      <>
+                        <p className="text-bone/70 text-xs">{a.user.firstName} {a.user.lastName}</p>
+                        <p className="font-mono text-[11px] text-bone/40">{a.user.email}</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-bone/40">—</p>
+                    )}
+                  </div>
+
+                  <div className="hidden md:block">
                     <StatusBadge status={a.status} />
-                  </td>
-                  <td className="px-4 py-3">{(a.commissionRate * 100).toFixed(0)}%</td>
-                  <td className="px-4 py-3">{a.totalClicks}</td>
-                  <td className="px-4 py-3">{a.totalConversions}</td>
-                  <td className="px-4 py-3">
+                  </div>
+
+                  <div className="hidden w-20 text-center lg:block">
+                    <p className="font-mono text-xs text-bone/60">{(a.commissionRate * 100).toFixed(0)}%</p>
+                    <p className="text-[10px] text-bone/30">taux</p>
+                  </div>
+
+                  <div className="hidden w-24 text-center lg:block">
+                    <p className="font-mono text-xs text-bone/60">{a.totalClicks} clics</p>
+                    <p className="font-mono text-xs text-bone/60">{a.totalConversions} conv.</p>
+                  </div>
+
+                  <div className="hidden xl:block">
                     <StatusBadge status={a.fraudReviewStatus} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      {a.status === 'PENDING' ? (
-                        <>
-                          <button
-                            disabled={busyId === a._id}
-                            onClick={() => review(a._id, 'APPROVE')}
-                            className="rounded-full bg-mint/15 px-3 py-1 text-xs text-mint hover:bg-mint/25 disabled:opacity-50"
-                          >
-                            Approuver
-                          </button>
-                          <button
-                            disabled={busyId === a._id}
-                            onClick={() => review(a._id, 'REJECT')}
-                            className="rounded-full bg-coral/15 px-3 py-1 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
-                          >
-                            Rejeter
-                          </button>
-                        </>
-                      ) : a.status === 'ACTIVE' ? (
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setExpandedId(isExpanded ? null : a._id)}
+                      className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30"
+                    >
+                      {isExpanded ? 'Réduire' : 'Détails'}
+                    </button>
+
+                    {a.status === 'PENDING' && (
+                      <>
                         <button
                           disabled={busyId === a._id}
-                          onClick={() => setStatus(a._id, 'SUSPENDED')}
-                          className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30 disabled:opacity-50"
+                          onClick={() => review(a._id, 'APPROVE')}
+                          className="rounded-full bg-mint/15 px-3 py-1 text-xs text-mint hover:bg-mint/25 disabled:opacity-50"
                         >
-                          Suspendre
+                          Approuver
                         </button>
-                      ) : a.status === 'SUSPENDED' ? (
                         <button
                           disabled={busyId === a._id}
-                          onClick={() => setStatus(a._id, 'ACTIVE')}
-                          className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30 disabled:opacity-50"
+                          onClick={() => {
+                            setRejectingId(rejectingId === a._id ? null : a._id);
+                            setRejectNotes('');
+                          }}
+                          className="rounded-full bg-coral/15 px-3 py-1 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
                         >
-                          Réactiver
+                          Rejeter
                         </button>
-                      ) : null}
+                      </>
+                    )}
+                    {a.status === 'ACTIVE' && (
+                      <button
+                        disabled={busyId === a._id}
+                        onClick={() => setStatus(a._id, 'SUSPENDED')}
+                        className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30 disabled:opacity-50"
+                      >
+                        Suspendre
+                      </button>
+                    )}
+                    {a.status === 'SUSPENDED' && (
+                      <button
+                        disabled={busyId === a._id}
+                        onClick={() => setStatus(a._id, 'ACTIVE')}
+                        className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30 disabled:opacity-50"
+                      >
+                        Réactiver
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Champ motif rejet inline */}
+                {rejectingId === a._id && (
+                  <div className="border-t border-white/5 bg-navy-deep px-4 py-3">
+                    <textarea
+                      autoFocus
+                      rows={2}
+                      placeholder="Motif du rejet (visible par l'affilié)"
+                      value={rejectNotes}
+                      onChange={(e) => setRejectNotes(e.target.value)}
+                      className="w-full resize-none rounded-lg border border-white/10 bg-navy-mid px-3 py-2 text-xs text-bone outline-none focus:border-gold"
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        disabled={busyId === a._id}
+                        onClick={() => review(a._id, 'REJECT', rejectNotes.trim() || undefined)}
+                        className="rounded-full bg-coral/15 px-3 py-1.5 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
+                      >
+                        Confirmer le rejet
+                      </button>
+                      <button
+                        onClick={() => { setRejectingId(null); setRejectNotes(''); }}
+                        className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-bone/60 hover:border-white/30"
+                      >
+                        Annuler
+                      </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                )}
+
+                {/* Panneau détails expandable */}
+                {isExpanded && (
+                  <div className="border-t border-white/5 bg-navy-deep px-4 py-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <InfoCard label="Nom d'affichage" value={a.displayName} />
+                      <InfoCard label="Code affilié" value={a.affiliateCode} mono />
+                      <InfoCard label="Statut" value={a.status} badge />
+                      <InfoCard label="Taux commission" value={`${(a.commissionRate * 100).toFixed(0)}%`} />
+
+                      {a.user && (
+                        <>
+                          <InfoCard label="Utilisateur" value={`${a.user.firstName} ${a.user.lastName}`} />
+                          <InfoCard label="Email" value={a.user.email} mono />
+                          <InfoCard label="Username" value={`@${a.user.username}`} mono />
+                          <InfoCard label="Pays" value={a.user.country} />
+                        </>
+                      )}
+
+                      <InfoCard label="Clics totaux" value={String(a.totalClicks)} />
+                      <InfoCard label="Conversions" value={String(a.totalConversions)} />
+                      <InfoCard label="Revenu total" value={`${a.totalRevenue.toLocaleString('fr-FR')}`} />
+                      <InfoCard label="Commission totale" value={`${a.totalCommission.toLocaleString('fr-FR')}`} />
+                      <InfoCard label="Statut fraude" value={a.fraudReviewStatus} badge />
+                      <InfoCard
+                        label="Créé le"
+                        value={new Date(a.createdAt).toLocaleDateString('fr-FR')}
+                      />
+                    </div>
+
+                    {a.description && (
+                      <div className="mt-4">
+                        <p className="text-[10px] uppercase tracking-wide text-bone/40">Description</p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-bone/70">{a.description}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </AdminShell>
+  );
+}
+
+function InfoCard({
+  label,
+  value,
+  mono,
+  badge,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  badge?: boolean;
+}) {
+  if (badge) {
+    return (
+      <div className="rounded-lg bg-navy-mid px-3 py-2">
+        <p className="text-[10px] uppercase tracking-wide text-bone/40">{label}</p>
+        <div className="mt-1">
+          <StatusBadge status={value} />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg bg-navy-mid px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-bone/40">{label}</p>
+      <p className={`mt-0.5 text-sm text-bone/80 ${mono ? 'font-mono' : ''}`}>{value}</p>
+    </div>
   );
 }
