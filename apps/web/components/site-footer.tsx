@@ -30,6 +30,41 @@ export function SiteFooter() {
                 </li>
               </ul>
             </div>
+            <div>
+              <p className="mb-2 font-medium text-bone/70">Réseaux sociaux</p>
+              <ul className="space-y-1">
+                <li>
+                  <a
+                    href="https://whatsapp.com/channel/0029VbE29XnBPzje98CXE50X"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-bone/80"
+                  >
+                    Canal WhatsApp
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.tiktok.com/@gaming.market0"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-bone/80"
+                  >
+                    TikTok
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://www.facebook.com/share/18E7Ayxg1k/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-bone/80"
+                  >
+                    Facebook
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
         <p className="mt-8 text-xs text-bone/30">
