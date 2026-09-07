@@ -259,6 +259,7 @@ export interface Affiliate {
   affiliateCode: string;
   displayName: string;
   description?: string;
+  socialLinks?: Record<string, string>;
   status: AffiliateStatus;
   tier: ObjectIdLike;
   commissionRate: number;

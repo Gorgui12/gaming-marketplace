@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   Newspaper,
   Database,
+  ShieldAlert,
   LogOut,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/disputes', label: 'Litiges', icon: Scale },
   { href: '/users', label: 'Utilisateurs', icon: Users },
+  { href: '/messages', label: 'Messages bloqués', icon: ShieldAlert },
   { href: '/blog', label: 'Blog', icon: Newspaper },
   { href: '/affiliates', label: 'Affiliés', icon: Users },
   { href: '/promo-codes', label: 'Codes promo', icon: Ticket },

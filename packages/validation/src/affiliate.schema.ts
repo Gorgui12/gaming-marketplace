@@ -1,11 +1,44 @@
 import { z } from 'zod';
 
+export const affiliateSocialPlatforms = [
+  'TIKTOK',
+  'YOUTUBE',
+  'INSTAGRAM',
+  'FACEBOOK',
+  'WHATSAPP',
+  'TELEGRAM',
+] as const;
+export type AffiliateSocialPlatform = (typeof affiliateSocialPlatforms)[number];
+
+// Au moins un réseau social AVEC lien est obligatoire pour candidater
+// (exigence §conditions du programme): l'équipe doit pouvoir vérifier
+// l'audience réelle avant approbation.
 export const applyForAffiliateSchema = z.object({
   displayName: z.string().min(2).max(80),
   description: z.string().max(1000).optional(),
-  platforms: z
-    .array(z.enum(['TIKTOK', 'YOUTUBE', 'INSTAGRAM', 'FACEBOOK', 'WHATSAPP', 'TELEGRAM']))
-    .min(1),
+  socialLinks: z
+    .record(z.enum(affiliateSocialPlatforms), z.string().trim().max(300))
+    .superRefine((links, ctx) => {
+      const entries = Object.entries(links).filter(([, url]) => url && url.trim().length > 0);
+      if (entries.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Au moins un lien vers un réseau social est obligatoire',
+        });
+        return;
+      }
+      const urlCheck = z.string().url('URL invalide');
+      for (const [platform, raw] of entries) {
+        const result = urlCheck.safeParse(raw.trim());
+        if (!result.success) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [platform],
+            message: `URL invalide pour ${platform.toLowerCase()}`,
+          });
+        }
+      }
+    }),
   followerCount: z.number().int().nonnegative().optional(),
   audienceDescription: z.string().max(500).optional(),
 });

@@ -7,6 +7,10 @@ const affiliateSchema = new Schema(
     affiliateCode: { type: String, required: true, unique: true, uppercase: true, trim: true },
     displayName: { type: String, required: true },
     description: { type: String },
+    // Liens des réseaux sociaux de l'affilié — obligatoires à la
+    // candidature (vérification de l'audience avant approbation). Map
+    // plateforme → URL, sérialisée en objet dans le JSON de l'API.
+    socialLinks: { type: Map, of: String, default: () => ({}) },
     status: {
       type: String,
       enum: Object.values(AffiliateStatus),

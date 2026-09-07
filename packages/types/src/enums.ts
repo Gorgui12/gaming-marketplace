@@ -176,5 +176,8 @@ export const NotificationType = {
   TRANSACTION_COMPLETED: 'TRANSACTION_COMPLETED',
   NEW_MESSAGE: 'NEW_MESSAGE',
   NEW_REVIEW: 'NEW_REVIEW',
+  // Signalement automatique aux équipes quand un message contenant des
+  // coordonnées (tentative de contournement de la plateforme) est bloqué.
+  CONTACT_INFO_BLOCKED: 'CONTACT_INFO_BLOCKED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];

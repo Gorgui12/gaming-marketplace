@@ -34,6 +34,7 @@ export class AffiliateService {
       affiliateCode: code,
       displayName: input.displayName,
       description: input.description,
+      socialLinks: input.socialLinks,
       status: AffiliateStatus.PENDING,
       commissionRate: DEFAULT_STARTER_COMMISSION_RATE,
     });
@@ -43,7 +44,7 @@ export class AffiliateService {
       action: 'affiliate.application_submitted',
       entityType: 'Affiliate',
       entityId: String(affiliate._id),
-      metadata: { platforms: input.platforms },
+      metadata: { socialLinks: input.socialLinks },
     });
 
     return affiliate;

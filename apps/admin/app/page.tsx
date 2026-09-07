@@ -37,6 +37,11 @@ const XOF = new Intl.NumberFormat('fr-FR');
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState('');
+  const [smtpBusy, setSmtpBusy] = useState(false);
+  const [smtpTo, setSmtpTo] = useState('');
+  const [smtpResult, setSmtpResult] = useState<
+    { ok: boolean; stage: string; error?: string; message?: string } | null
+  >(null);
 
   const load = useCallback(async () => {
     try {
@@ -50,9 +55,58 @@ export default function AdminDashboardPage() {
     load();
   }, [load]);
 
+  async function testEmail() {
+    setSmtpBusy(true);
+    setSmtpResult(null);
+    setError('');
+    try {
+      const data = await apiFetch<{
+        result: { ok: boolean; stage: string; error?: string; message?: string };
+      }>('/api/v1/admin/email/test', {
+        method: 'POST',
+        json: { to: smtpTo.trim() || undefined },
+      });
+      setSmtpResult(data.result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur du test SMTP');
+    } finally {
+      setSmtpBusy(false);
+    }
+  }
+
   return (
     <AdminShell title="Dashboard">
       {error && <p className="mb-4 text-sm text-coral">{error}</p>}
+
+      <Panel title="Diagnostic email (SMTP)">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={smtpTo}
+            onChange={(e) => setSmtpTo(e.target.value)}
+            placeholder="Email pour l'envoi de test (optionnel)"
+            className="flex-1 min-w-[220px] rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-sm text-bone outline-none focus:border-gold"
+          />
+          <button
+            disabled={smtpBusy}
+            onClick={testEmail}
+            className="rounded-full bg-gold px-5 py-2 text-sm font-semibold text-navy-deep hover:bg-gold-soft disabled:opacity-60"
+          >
+            {smtpBusy ? 'Test…' : 'Tester le SMTP'}
+          </button>
+        </div>
+        {smtpResult && (
+          <div
+            className={`mt-3 rounded-lg px-3 py-2 text-xs ${
+              smtpResult.ok ? 'bg-mint/15 text-mint' : 'bg-coral/15 text-coral'
+            }`}
+          >
+            {smtpResult.ok
+              ? `✔ Connexion SMTP OK${smtpResult.message ? ` — ${smtpResult.message}` : ''}`
+              : `✘ Échec (${smtpResult.stage === 'connexion' ? 'connexion' : 'envoi'}) : ${smtpResult.error ?? 'erreur inconnue'}`}
+          </div>
+        )}
+      </Panel>
+
       {!stats ? (
         <p className="text-sm text-bone/50">Chargement…</p>
       ) : (

@@ -26,6 +26,9 @@ export const ErrorCode = {
   DISPUTE_ALREADY_OPEN: 'DISPUTE_ALREADY_OPEN',
 
   ACCESS_NOT_YET_RELEASABLE: 'ACCESS_NOT_YET_RELEASABLE',
+
+  // Message contenant des coordonnées — bloqué + signalé à l'équipe (§15).
+  CONTACT_INFO_BLOCKED: 'CONTACT_INFO_BLOCKED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

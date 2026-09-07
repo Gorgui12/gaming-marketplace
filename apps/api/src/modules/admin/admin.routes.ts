@@ -16,6 +16,7 @@ import {
 } from './admin-maintenance.controller.js';
 import { listAdminDisputes, resolveAdminDispute } from './admin-disputes.controller.js';
 import { listAdminTransactions } from './admin-transactions.controller.js';
+import { testSmtp } from './admin-email.controller.js';
 
 export const adminRouter = Router();
 
@@ -23,6 +24,7 @@ adminRouter.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN));
 
 // Dashboard
 adminRouter.get('/stats', getAdminStats);
+adminRouter.post('/email/test', testSmtp);
 
 // Utilisateurs
 adminRouter.get('/users', listAdminUsers);

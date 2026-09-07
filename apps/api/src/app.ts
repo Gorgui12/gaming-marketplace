@@ -25,6 +25,7 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { reviewsRouter } from './modules/reviews/reviews.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
 import { messagingRouter } from './modules/messaging/messaging.routes.js';
+import { adminMessagesRouter } from './modules/messaging/admin-messages.routes.js';
 import { blogRouter } from './modules/blog/blog.routes.js';
 import { adminBlogRouter } from './modules/blog/admin-blog.routes.js';
 
@@ -72,6 +73,7 @@ export function createApp(): Express {
   app.use('/api/v1/users', usersRouter);
   app.use('/api/v1/conversations', messagingRouter);
   app.use('/api/v1/blog', blogRouter);
+  app.use('/api/v1/admin', adminMessagesRouter);
   app.use('/api/v1/admin', adminBlogRouter);
 
   app.use(errorHandlerMiddleware);

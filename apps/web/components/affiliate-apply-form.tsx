@@ -12,24 +12,32 @@ const PLATFORM_OPTIONS = [
   { value: 'TELEGRAM', label: 'Groupe Telegram' },
 ] as const;
 
+const PLATFORM_HINTS: Record<string, string> = {
+  TIKTOK: 'tiktok.com/@votre-compte',
+  YOUTUBE: 'youtube.com/@votre-chaine',
+  INSTAGRAM: 'instagram.com/votre-compte',
+  FACEBOOK: 'facebook.com/votre-page',
+  WHATSAPP: 'Lien d\'invitation de votre groupe',
+  TELEGRAM: 'Lien d\'invitation de votre groupe',
+};
+
 export function AffiliateApplyForm() {
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
-  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
   const [followerCount, setFollowerCount] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
-  function togglePlatform(value: string) {
-    setPlatforms((prev) =>
-      prev.includes(value) ? prev.filter((p) => p !== value) : [...prev, value],
-    );
+  function setPlatformLink(platform: string, url: string) {
+    setSocialLinks((prev) => ({ ...prev, [platform]: url }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (platforms.length === 0) {
-      setErrorMessage('Sélectionnez au moins une plateforme');
+    const hasLink = Object.values(socialLinks).some((url) => url && url.trim().length > 0);
+    if (!hasLink) {
+      setErrorMessage('Saisissez au moins un lien vers un réseau social');
       setStatus('error');
       return;
     }
@@ -41,7 +49,7 @@ export function AffiliateApplyForm() {
         json: {
           displayName,
           description: description || undefined,
-          platforms,
+          socialLinks,
           followerCount: followerCount ? Number(followerCount) : undefined,
         },
       });
@@ -77,22 +85,30 @@ export function AffiliateApplyForm() {
           />
         </Field>
 
-        <Field label="Vos plateformes">
-          <div className="flex flex-wrap gap-2">
+        <Field label="Liens de vos réseaux sociaux (obligatoire)">
+          <div className="space-y-3">
             {PLATFORM_OPTIONS.map((p) => (
-              <button
-                key={p.value}
-                type="button"
-                onClick={() => togglePlatform(p.value)}
-                className={`rounded-full border px-3 py-1.5 text-xs transition ${
-                  platforms.includes(p.value)
-                    ? 'border-gold bg-gold/15 text-gold'
-                    : 'border-white/15 text-bone/60 hover:border-white/30'
-                }`}
-              >
-                {p.label}
-              </button>
+              <div key={p.value}>
+                <label
+                  htmlFor={`link-${p.value}`}
+                  className="mb-1 block text-xs font-medium text-bone/60"
+                >
+                  {p.label}
+                </label>
+                <input
+                  id={`link-${p.value}`}
+                  type="url"
+                  value={socialLinks[p.value] ?? ''}
+                  onChange={(e) => setPlatformLink(p.value, e.target.value)}
+                  placeholder={`https://${PLATFORM_HINTS[p.value]}`}
+                  className="w-full rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-sm text-bone outline-none focus:border-gold"
+                />
+              </div>
             ))}
+            <p className="text-xs text-bone/50">
+              Au moins un lien est obligatoire — l&apos;équipe vérifie votre audience avant
+              approbation.
+            </p>
           </div>
         </Field>
 

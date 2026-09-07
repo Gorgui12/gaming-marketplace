@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer';
+import { logger } from '../logger.js';
 import { env } from '../../config/env.js';
 import { emailTemplates } from './email.templates.js';
 
-const transporter = nodemailer.createTransport({
+export const smtpTransporter = nodemailer.createTransport({
   host: env.SMTP_HOST,
   port: env.SMTP_PORT,
   secure: env.SMTP_PORT === 465,
@@ -15,16 +16,84 @@ const transporter = nodemailer.createTransport({
 export class EmailService {
   private static async send(to: string, subject: string, html: string) {
     try {
-      await transporter.sendMail({
+      await smtpTransporter.sendMail({
         from: env.SMTP_FROM,
         to,
         subject,
         html,
       });
+      logger.info({ to, subject }, 'Email envoyé');
     } catch (err) {
-      // Les emails ne doivent jamais casser le flow applicatif
-      // eslint-disable-next-line no-console
-      console.error('[EmailService] Erreur envoi email:', err);
+      // Les emails ne doivent jamais casser le flow applicatif, mais l'échec
+      // DOIT être visible dans les logs (pino, en production → Cloud Logging)
+      // pour pouvoir diagnostiquer un SMTP muet.
+      logger.error(
+        {
+          err,
+          to,
+          subject,
+          smtpHost: env.SMTP_HOST,
+          smtpPort: env.SMTP_PORT,
+        },
+        'Échec d\'envoi d\'email',
+      );
+    }
+  }
+
+  /**
+   * Vérifie que le transport SMTP répond (connexion + authentification).
+   * N'envoie aucun email. Retourne un résultat sans jamais exposer le
+   * secret SMTP.
+   */
+  static async verifyConnection(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      await smtpTransporter.verify();
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(
+        { smtpHost: env.SMTP_HOST, smtpPort: env.SMTP_PORT, err },
+        'Échec de connexion SMTP',
+      );
+      return { ok: false, error: message };
+    }
+  }
+
+  /**
+   * Diagnostic complet pour le back-office (/api/v1/admin/email/test) :
+   * 1) connexion + auth SMTP, 2) envoi d'un email de test (optionnel).
+   */
+  static async testSmtp(sendTo?: string): Promise<{
+    ok: boolean;
+    stage: 'connexion' | 'envoi';
+    error?: string;
+    message?: string;
+  }> {
+    const connection = await this.verifyConnection();
+    if (!connection.ok) {
+      return { ok: false, stage: 'connexion', error: connection.error };
+    }
+    if (!sendTo) {
+      return { ok: true, stage: 'connexion', message: 'SMTP joignable et authentifié' };
+    }
+    try {
+      await smtpTransporter.sendMail({
+        from: env.SMTP_FROM,
+        to: sendTo,
+        subject: `Test SMTP GamingMarket — ${new Date().toLocaleString('fr-FR')}`,
+        html: '<p>Ceci est un email de test envoyé depuis le back-office de GamingMarket.</p>',
+      });
+      return {
+        ok: true,
+        stage: 'envoi',
+        message: `Email de test envoyé vers ${sendTo}`,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        stage: 'envoi',
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 

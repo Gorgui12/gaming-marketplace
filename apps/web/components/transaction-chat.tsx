@@ -25,6 +25,7 @@ export function TransactionChat({
   const [messages, setMessages] = useState<ChatMessage[] | null>(null);
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   function load() {
@@ -48,6 +49,7 @@ export function TransactionChat({
   async function handleSend() {
     if (!content.trim()) return;
     setSending(true);
+    setSendError('');
     try {
       await apiFetch(`/api/v1/conversations/${transactionId}/messages`, {
         method: 'POST',
@@ -55,8 +57,10 @@ export function TransactionChat({
       });
       setContent('');
       load();
-    } catch {
-      // silencieux : l'utilisateur peut réessayer, pas d'action bloquante
+    } catch (err) {
+      // Le message a été bloqué (coordonnées détectées) ou l'envoi a
+      // échoué : on montre l'erreur à l'utilisateur pour qu'il corrige.
+      setSendError(err instanceof Error ? err.message : "Envoi impossible pour l'instant");
     } finally {
       setSending(false);
     }
@@ -131,6 +135,12 @@ export function TransactionChat({
           <Send size={14} />
         </button>
       </div>
+      {sendError && (
+        <p className="flex items-start gap-1.5 border-t border-coral/20 bg-coral/10 px-3 py-2 text-[11px] leading-snug text-coral">
+          <span>⚠</span>
+          <span>{sendError}</span>
+        </p>
+      )}
     </div>
   );
 }

@@ -60,6 +60,9 @@ export function SiteNav() {
       </Link>
       {user && (
         <>
+          <Link href="/profile" className="hover:text-bone">
+            Mon profil
+          </Link>
           <Link href="/dashboard/buyer" className="hover:text-bone">
             Mes achats
           </Link>
@@ -78,6 +81,7 @@ export function SiteNav() {
     ['/affiliate', 'Devenir affilié'],
     ...(user
       ? ([
+          ['/profile', 'Mon profil'],
           ['/dashboard/buyer', 'Mes achats'],
           ['/dashboard/seller', 'Espace vendeur'],
           ['/dashboard/affiliate', 'Espace affilié'],

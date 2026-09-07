@@ -17,6 +17,7 @@ interface Affiliate {
   affiliateCode: string;
   displayName: string;
   description?: string;
+  socialLinks?: Record<string, string>;
   status: string;
   commissionRate: number;
   totalClicks: number;
@@ -273,6 +274,31 @@ export default function AdminAffiliatesPage() {
                         label="Créé le"
                         value={new Date(a.createdAt).toLocaleDateString('fr-FR')}
                       />
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-[10px] uppercase tracking-wide text-bone/40">
+                        Réseaux sociaux
+                      </p>
+                      {(!a.socialLinks || Object.keys(a.socialLinks).length === 0) ? (
+                        <p className="mt-1 text-sm text-coral/80">Aucun lien soumis</p>
+                      ) : (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {Object.entries(a.socialLinks)
+                            .filter(([, url]) => url)
+                            .map(([platform, url]) => (
+                              <a
+                                key={platform}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-full border border-white/15 bg-navy-mid px-3 py-1 text-xs text-bone/70 hover:border-gold hover:text-gold"
+                              >
+                                {platform} ↗
+                              </a>
+                            ))}
+                        </div>
+                      )}
                     </div>
 
                     {a.description && (
