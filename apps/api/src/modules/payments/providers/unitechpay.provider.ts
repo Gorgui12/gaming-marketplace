@@ -58,29 +58,48 @@ export class UnitechPayProvider implements PaymentProvider {
       },
     });
 
+    const body = await res.text();
+
     if (!res.ok) {
       logger.error(
-        { status: res.status, statusText: res.statusText },
+        { status: res.status, statusText: res.statusText, body },
         'Réponse UnitechPay non-2xx',
       );
       throw new AppError(
         ErrorCode.PAYMENT_INIT_FAILED,
-        "Impossible d'appeler l'API UnitechPay",
+        `Impossible d'appeler l'API UnitechPay (${res.status}: ${body.slice(0, 200)})`,
         res.status >= 500 ? res.status : 502,
       );
     }
 
-    return res.json();
+    try {
+      return JSON.parse(body);
+    } catch {
+      logger.error({ body }, 'Réponse UnitechPay non-JSON');
+      throw new AppError(ErrorCode.PAYMENT_INIT_FAILED, 'Réponse UnitechPay invalide', 502);
+    }
   }
 
   async initiatePayment(input: InitiatePaymentInput): Promise<InitiatePaymentResult> {
+    if (!input.customer.phone) {
+      throw new AppError(
+        ErrorCode.PAYMENT_INIT_FAILED,
+        'Numéro de téléphone requis pour le paiement Wave/Orange Money',
+        400,
+      );
+    }
+
+    // Nettoyer le numéro : supprimer espaces, tirets, etc.
+    const cleanPhone = input.customer.phone.replace(/[\s\-()]/g, '');
+
     let payload: UnitechCreateWaveResponse;
     try {
       payload = (await this.request('?action=create_wave_payment', {
         method: 'POST',
         body: JSON.stringify({
           amount: input.amount,
-          customer_number: input.customer.phone,
+          currency: input.currency,
+          customer_number: cleanPhone,
           description: input.description,
           callback_success: input.returnUrl,
           callback_cancel: input.returnUrl,
@@ -121,19 +140,37 @@ export class UnitechPayProvider implements PaymentProvider {
     // échouer proprement la route), verifyTransaction suit le pattern
     // PayDunyaProvider : toute erreur réseau/API se traduit par un retour
     // FAILED, jamais une exception — le service l'appelle sans try/catch.
-    let payload: { data?: Array<{ transaction_id?: string | number; status?: string }> };
+    let payload: {
+      data?:
+        | Array<{ transaction_id?: string | number; status?: string }>
+        | { transactions?: Array<{ id?: string | number; status?: string }> };
+    };
     try {
       payload = (await this.request('?action=transactions')) as {
-        data?: Array<{ transaction_id?: string | number; status?: string }>;
+        data?:
+          | Array<{ transaction_id?: string | number; status?: string }>
+          | { transactions?: Array<{ id?: string | number; status?: string }> };
       };
     } catch (err) {
       logger.error({ err, providerTransactionId }, 'Échec vérification transaction UnitechPay');
       return 'FAILED';
     }
 
-    const found = (payload.data ?? []).find(
-      (t) => t.transaction_id !== undefined && String(t.transaction_id) === providerTransactionId,
-    );
+    // L'API réelle renvoie `data.transactions` (liste), pas un `data` tableau
+    // direct. On normalise les deux formes pour la recherche.
+    const list = Array.isArray(payload.data)
+      ? payload.data
+      : ((payload.data?.transactions as Array<{ id?: string | number; status?: string }>) ?? []);
+
+    const found = list.find((t) => {
+      const row = t as {
+        transaction_id?: string | number;
+        id?: string | number;
+        status?: string;
+      };
+      const id = row.transaction_id ?? row.id;
+      return id !== undefined && String(id) === providerTransactionId;
+    });
 
     if (!found) {
       logger.warn({ providerTransactionId }, 'Transaction UnitechPay introuvable dans la liste');

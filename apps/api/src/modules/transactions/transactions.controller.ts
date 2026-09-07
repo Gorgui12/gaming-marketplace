@@ -38,6 +38,7 @@ export const createTransaction = asyncHandler(async (req: Request, res: Response
     transactionId: String(transaction._id),
     buyerName: req.user!.id, // TODO: remplacer par le vrai nom une fois le profil chargé
     buyerEmail: '', // TODO: charger depuis le profil User
+    buyerPhone: input.phone,
     // Le dashboard acheteur déclenche la vérification active du paiement
     // à l'affichage (filet de sécurité si l'IPN n'est jamais arrivé).
     returnUrl: resolveReturnUrl(req),

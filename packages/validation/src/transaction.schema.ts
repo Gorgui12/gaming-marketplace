@@ -13,6 +13,9 @@ export const initiateTransactionSchema = z.object({
   // (voir AffiliateAttributionService) — optionnel, absent si aucun
   // tracking de session n'est actif côté client.
   sessionId: z.string().optional(),
+  // Numéro de téléphone Mobile Money (Wave/Orange Money) du buyer.
+  // Requis pour UnitechPay qui identifie le payeur par ce numéro.
+  phone: z.string().min(8).max(15).optional(),
 });
 export type InitiateTransactionInput = z.infer<typeof initiateTransactionSchema>;
 
