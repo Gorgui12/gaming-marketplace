@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PaymentStatus, TransactionState } from '@gm/types';
+import { PaymentStatus, TransactionState, ListingStatus } from '@gm/types';
 import { createFakeModel } from './helpers/fake-model.js';
 
 const fakeTransactionModel = createFakeModel();
 const fakePaymentEventModel = createFakeModel();
+const fakeListingModel = createFakeModel();
+const fakeUserModel = createFakeModel();
 const pristinePaymentEventCreate = fakePaymentEventModel.create.bind(fakePaymentEventModel);
 
 // Le webhook du provider actif lui-même (signature, format) est mocké ici
@@ -33,6 +35,12 @@ vi.mock('../src/modules/transactions/transaction.model.js', () => ({
 vi.mock('../src/modules/payments/payment-event.model.js', () => ({
   PaymentEventModel: fakePaymentEventModel,
 }));
+vi.mock('../src/modules/listings/listing.model.js', () => ({
+  ListingModel: fakeListingModel,
+}));
+vi.mock('../src/modules/users/user.model.js', () => ({
+  UserModel: fakeUserModel,
+}));
 
 const createConversionMock = vi.fn();
 vi.mock('../src/modules/affiliates/affiliate-commission.service.js', () => ({
@@ -60,6 +68,8 @@ describe('PaymentService.handleWebhook — idempotence', () => {
   beforeEach(() => {
     fakeTransactionModel.__reset();
     fakePaymentEventModel.__reset();
+    fakeListingModel.__reset();
+    fakeUserModel.__reset();
     vi.clearAllMocks();
     fakePaymentEventModel.create = makeIdempotentCreate();
   });
@@ -112,13 +122,16 @@ describe('PaymentService.handleWebhook — idempotence', () => {
     expect(afterSecond!.escrowStatus).toBe(TransactionState.ESCROW_ACTIVE); // inchangé, pas re-avancé
   });
 
-  it('marks paymentStatus FAILED when the provider reports a non-CONFIRMED status', async () => {
+  it('cancels the transaction and releases the listing when the provider reports FAILED (webhook définitif)', async () => {
     const txn = await fakeTransactionModel.create({
       paymentReference: 'GM-REF-3',
       escrowStatus: TransactionState.PAYMENT_PENDING,
       paymentStatus: PaymentStatus.PENDING,
       stateHistory: [],
+      listing: 'listing-1',
+      buyer: 'user-1',
     });
+    await fakeListingModel.create({ _id: 'listing-1', status: ListingStatus.RESERVED });
 
     parseWebhookMock.mockResolvedValue({
       providerEventId: 'evt-3',
@@ -131,7 +144,9 @@ describe('PaymentService.handleWebhook — idempotence', () => {
 
     const updated = await fakeTransactionModel.findById(txn._id);
     expect(updated!.paymentStatus).toBe(PaymentStatus.FAILED);
-    expect(updated!.escrowStatus).toBe(TransactionState.PAYMENT_PENDING); // pas avancée
+    expect(updated!.escrowStatus).toBe(TransactionState.CANCELLED); // annulée
+    const listing = await fakeListingModel.findById('listing-1');
+    expect(listing!.status).toBe(ListingStatus.PUBLISHED); // libérée
   });
 
   it('silently ignores a webhook referencing an unknown transaction (no crash, no state change)', async () => {
@@ -240,7 +255,7 @@ describe('PaymentService.syncPaymentStatus — vérification active (filet anti-
     expect(result.synced).toBe(false);
   });
 
-  it('marks the payment FAILED when the provider reports a non-confirmed status, without advancing escrow', async () => {
+  it('cancels the transaction and releases the listing when the provider reports CANCELLED (payment_expired)', async () => {
     const txn = await fakeTransactionModel.create({
       buyer: 'user-buyer',
       paymentReference: 'GM-SYNC-3',
@@ -248,7 +263,9 @@ describe('PaymentService.syncPaymentStatus — vérification active (filet anti-
       escrowStatus: TransactionState.PAYMENT_PENDING,
       paymentStatus: PaymentStatus.PENDING,
       stateHistory: [],
+      listing: 'listing-sync-3',
     });
+    await fakeListingModel.create({ _id: 'listing-sync-3', status: ListingStatus.RESERVED });
 
     verifyTransactionMock.mockResolvedValue('CANCELLED');
 
@@ -259,7 +276,9 @@ describe('PaymentService.syncPaymentStatus — vérification active (filet anti-
 
     const updated = await fakeTransactionModel.findById(txn._id);
     expect(updated!.paymentStatus).toBe(PaymentStatus.FAILED);
-    expect(updated!.escrowStatus).toBe(TransactionState.PAYMENT_PENDING); // pas avancée
+    expect(updated!.escrowStatus).toBe(TransactionState.CANCELLED); // paiement expiré -> annulée
+    const listing = await fakeListingModel.findById('listing-sync-3');
+    expect(listing!.status).toBe(ListingStatus.PUBLISHED); // libérée
   });
 
   it('rejects a caller who is not the buyer (no forged status check)', async () => {

@@ -27,6 +27,12 @@ import { UserModel } from '../users/user.model.js';
 const provider: PaymentProvider =
   env.PAYMENT_PROVIDER === 'unitechpay' ? new UnitechPayProvider() : new PayDunyaProvider();
 
+// Délai au-delà duquel une transaction PAYMENT_PENDING est considérée
+// abandonnée par le balayage périodique. Aligné sur l'expiration des liens de
+// paiement Wave (~30 min côté UnitechPay) + marge pour laisser le webhook
+// payment_expired arriver en premier (~40 min au total).
+const STALE_PAYMENT_OLDER_THAN_MS = 40 * 60 * 1000;
+
 export class PaymentService {
   static async initiateForTransaction(input: {
     transactionId: string;
@@ -355,6 +361,43 @@ export class PaymentService {
         },
       );
     }
+  }
+
+  /**
+   * Filet de sécurité anti-blocage des annonces : si le webhook
+   * payment_expired / payment_failed ne parvient jamais (perdu, proxy,
+   * événement mal configuré), une transaction PAYMENT_PENDING resterait
+   * réservée à jamais et son annonce invisible du marketplace. Ce balayage
+   * re-interroge le provider sur les transactions en attente depuis plus de
+   * STALE_PAYMENT_OLDER_THAN_MS et applique le MÊME traitement que l'IPN —
+   * mais avec la source 'verify' : un FAILED (réseau / transaction absente
+   * de la liste) n'annule rien, seul un CANCELLED (payment expiré) ou un
+   * CONFIRMED concluent.
+   *
+   * Idempotent : une transaction déjà avancée (webhook reçu entre-temps) ne
+   * matche plus escrowStatus=PAYMENT_PENDING et est simplement ignorée.
+   */
+  static async sweepStalePayments(): Promise<number> {
+    const deadline = new Date(Date.now() - STALE_PAYMENT_OLDER_THAN_MS);
+    const stale = await TransactionModel.find({
+      escrowStatus: TransactionState.PAYMENT_PENDING,
+      createdAt: { $lt: deadline },
+    }).limit(50);
+
+    for (const t of stale) {
+      if (!t.providerTransactionId) continue;
+      try {
+        const status = await provider.verifyTransaction(t.providerTransactionId);
+        await this.applyPaymentConfirmation(t, status, 'verify');
+        logger.info(
+          { transactionId: t._id, status },
+          'Balayage paiement en attente: statut provider appliqué',
+        );
+      } catch (err) {
+        logger.error({ err, transactionId: t._id }, 'Balayage: échec pour une transaction');
+      }
+    }
+    return stale.length;
   }
 }
 
