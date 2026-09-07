@@ -272,25 +272,21 @@ export default async function ListingDetailPage({
 
         {/* Barre d'achat fixe — mobile/tablette uniquement, toujours accessible */}
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy-deep/95 px-4 pb-safe backdrop-blur lg:hidden">
-          <div className="mx-auto flex max-w-6xl items-center gap-4 py-3">
-            <p className="min-w-0">
-              <span className="block font-mono text-lg leading-tight text-gold">
+          <div className="mx-auto max-w-6xl py-3">
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="font-mono text-lg leading-tight text-gold">
                 {listing.price.toLocaleString('fr-FR')}{' '}
                 <span className="text-xs">{listing.currency}</span>
               </span>
-              <span className="block truncate text-[11px] text-bone/40">
-                Paiement Orange Money / Wave
-              </span>
-            </p>
-            <div className="ml-auto w-40 max-w-[50%] shrink-0 sm:w-48">
-              <BuyButton listingId={listing._id} compact />
+              <span className="text-[11px] text-bone/40">Wave · Orange Money</span>
             </div>
+            <BuyButton listingId={listing._id} compact />
           </div>
         </div>
       </main>
       <SiteFooter />
       {/* Compense la barre d'achat fixe pour ne pas masquer le pied de page */}
-      <div aria-hidden className="h-16 bg-navy-deep lg:hidden" />
+      <div aria-hidden className="h-32 bg-navy-deep lg:hidden" />
     </>
   );
 }

@@ -20,6 +20,15 @@ const BASE_STYLE = `
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 `;
 
+// URL publique de l'app web, utilisée pour les boutons "call to action" des
+// emails. À définir côté serveur API (déploiement production) — sinon fallback
+// localhost pour le dev local.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
+
+const BUYER_DASHBOARD_URL = `${APP_URL}/dashboard/buyer`;
+const SELLER_DASHBOARD_URL = `${APP_URL}/dashboard/seller`;
+const MARKETPLACE_URL = `${APP_URL}/marketplace`;
+
 const CONTAINER_STYLE = `
   max-width: 600px; margin: 0 auto; background: #0f172a;
   border-radius: 12px; overflow: hidden;
@@ -117,6 +126,9 @@ export const emailTemplates = {
         <p style="margin:4px 0 0;color:#d4af37;font-size:20px;font-weight:700;">${params.amount.toLocaleString('fr-FR')} ${escapeHtml(params.currency)}</p>
       </div>
       <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${isBuyer ? BUYER_DASHBOARD_URL : SELLER_DASHBOARD_URL}" style="${BUTTON_STYLE}">${isBuyer ? 'Accéder à mes achats' : 'Voir mes ventes'}</a>
+      </div>
     `;
     return { subject: isBuyer ? 'Commande créée' : 'Nouvelle commande reçue', html: wrap(isBuyer ? 'Votre commande' : 'Nouvelle vente', body) };
   },
@@ -137,8 +149,30 @@ export const emailTemplates = {
         : `Le paiement pour la commande <strong>${listingTitle}</strong> a été confirmé. Veuillez livrer les accès du compte.`
       }</p>
       <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${isBuyer ? BUYER_DASHBOARD_URL : SELLER_DASHBOARD_URL}" style="${BUTTON_STYLE}">${isBuyer ? 'Suivre ma commande' : 'Livrer les accès'}</a>
+      </div>
     `;
     return { subject: 'Paiement confirmé', html: wrap('Paiement confirmé', body) };
+  },
+
+  transactionPaymentFailed(params: {
+    firstName: string;
+    transactionId: string;
+    listingTitle: string;
+  }) {
+    const firstName = escapeHtml(params.firstName);
+    const listingTitle = escapeHtml(params.listingTitle);
+    const body = `
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">Le paiement pour <strong>${listingTitle}</strong> n'a pas abouti (annulé ou expiré). Aucun montant n'a été débité.</p>
+      <p style="margin:0 0 16px;">Vous pouvez réessayer de commander cette annonce à tout moment.</p>
+      <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${MARKETPLACE_URL}" style="${BUTTON_STYLE}">Retourner à la marketplace</a>
+      </div>
+    `;
+    return { subject: 'Paiement non abouti', html: wrap('Paiement non abouti', body) };
   },
 
   transactionDelivered(params: {
@@ -157,6 +191,9 @@ export const emailTemplates = {
         : `Vous avez livré les accès pour <strong>${listingTitle}</strong>. L'acheteur est en train de vérifier.`
       }</p>
       <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${isBuyer ? BUYER_DASHBOARD_URL : SELLER_DASHBOARD_URL}" style="${BUTTON_STYLE}">${isBuyer ? 'Consulter les accès' : 'Voir ma vente'}</a>
+      </div>
     `;
     return { subject: 'Accès livrés', html: wrap('Livraison effectuée', body) };
   },
@@ -180,6 +217,9 @@ export const emailTemplates = {
         : `La transaction pour <strong>${listingTitle}</strong> est terminée. ${params.sellerAmount ? `Vous recevrez <strong>${params.sellerAmount.toLocaleString('fr-FR')} ${currency}</strong> prochainement.` : ''}`
       }</p>
       <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${isBuyer ? BUYER_DASHBOARD_URL : SELLER_DASHBOARD_URL}" style="${BUTTON_STYLE}">${isBuyer ? 'Voir mon historique' : 'Voir ma vente'}</a>
+      </div>
     `;
     return { subject: 'Transaction terminée', html: wrap('Transaction complétée', body) };
   },
@@ -200,6 +240,9 @@ export const emailTemplates = {
         <p style="margin:4px 0 0;color:#e2e8f0;">${escapeHtml(params.reason)}</p>
       </div>
       <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${BUYER_DASHBOARD_URL}" style="${BUTTON_STYLE}">Voir mes achats</a>
+      </div>
     `;
     return { subject: 'Transaction remboursée', html: wrap('Remboursement', body) };
   },

@@ -6,7 +6,7 @@ import { logger } from '../../lib/logger.js';
 import type { HydratedDocument } from 'mongoose';
 import { TransactionModel, type TransactionDocument } from '../transactions/transaction.model.js';
 import { ListingModel } from '../listings/listing.model.js';
-import { assertTransition } from '../transactions/transaction-state-machine.js';
+import { assertTransition, canTransition } from '../transactions/transaction-state-machine.js';
 import { PayDunyaProvider } from './providers/paydunya.provider.js';
 import { UnitechPayProvider } from './providers/unitechpay.provider.js';
 import type {
@@ -17,6 +17,8 @@ import type {
 import { PaymentEventModel } from './payment-event.model.js';
 import { env } from '../../config/env.js';
 import { AffiliateCommissionService } from '../affiliates/affiliate-commission.service.js';
+import { EmailService } from '../../lib/email/email.service.js';
+import { UserModel } from '../users/user.model.js';
 
 // Point unique de sélection du provider actif. Ajouter un nouveau provider
 // (Stripe, Paddle...) = créer une classe qui implémente PaymentProvider et
@@ -126,7 +128,7 @@ export class PaymentService {
     }
 
     const status = await provider.verifyTransaction(transaction.providerTransactionId);
-    await this.applyPaymentConfirmation(transaction, status);
+    await this.applyPaymentConfirmation(transaction, status, 'verify');
     return { transaction, synced: true };
   }
 
@@ -171,7 +173,7 @@ export class PaymentService {
       throw err;
     }
 
-    await this.applyPaymentConfirmation(transaction, event.status);
+    await this.applyPaymentConfirmation(transaction, event.status, 'webhook');
   }
 
   /**
@@ -182,13 +184,82 @@ export class PaymentService {
    * un IPN et une vérification active (ou deux appels concurrents) de
    * progresser tous les deux la state machine en parallèle.
    */
+  /**
+   * Logique partagée IPN / vérification active: applique un statut provider
+   * sur une transaction en PAYMENT_PENDING. Idempotente ET atomique — le
+   * verrou est posé par MongoDB lui-même via findOneAndUpdate filtré sur
+   * escrowStatus, pas par une lecture-puis-écriture en mémoire. Ça empêche
+   * un IPN et une vérification active (ou deux appels concurrents) de
+   * progresser tous les deux la state machine en parallèle.
+   *
+   * `source` distingue l'origine du statut car ils N'AURAIENT pas la même
+   * fiabilité pour un FAILED:
+   *  - webhook: statut envoyé par le provider (definitif) -> PAYMENT_FAILED
+   *    annule la commande.
+   *  - verify: appel actif client. Un FAILED peut être un simple problème
+   *    réseau / transaction pas encore listée -> on N'annule PAS, on se
+   *    borne à marquer paymentStatus (l'IPN officiel tranchera).
+   */
   private static async applyPaymentConfirmation(
     transaction: HydratedDocument<TransactionDocument>,
     status: ProviderPaymentStatus,
+    source: 'webhook' | 'verify',
   ): Promise<void> {
+    // Paiement encore en cours: ne rien faire, attendre l'issue (webhook
+    // payment_completed / payment_expired / vérification active ultérieure).
+    if (status === 'PENDING') {
+      return;
+    }
+
     if (status !== 'CONFIRMED') {
+      // Un FAILED via vérification active peut être un faux négatif (réseau,
+      // transaction absente de la liste) — on ne conclut pas. Seuls un passé
+      // définitif (CANCELLED = payment_expired) ou un webhook officiel du
+      // provider justifient d'annuler la commande.
+      if (status === 'FAILED' && source === 'verify') {
+        transaction.paymentStatus = PaymentStatus.FAILED;
+        await transaction.save();
+        return;
+      }
+
+      // FAILED (webhook) ou CANCELLED (payment_expired) : la commande
+      // n'aboutira jamais. On annule la transaction, on libère l'annonce
+      // (RESERVED -> PUBLISHED) et on prévient l'acheteur — sinon l'annonce
+      // resterait invisible du marketplace indéfiniment alors que le
+      // paiement a été abandonné ou a expiré.
+      const escrowStatus = transaction.escrowStatus as TransactionState;
+      if (!canTransition(escrowStatus, TransactionState.CANCELLED, 'SYSTEM')) {
+        logger.warn(
+          { transactionId: transaction._id, escrowStatus },
+          'Transaction non annulable (statut évolué) — annonce non libérée',
+        );
+        return;
+      }
+
       transaction.paymentStatus = PaymentStatus.FAILED;
+      transaction.stateHistory.push({
+        from: escrowStatus,
+        to: TransactionState.CANCELLED,
+        at: new Date(),
+        actor: 'SYSTEM',
+      });
+      transaction.escrowStatus = TransactionState.CANCELLED;
       await transaction.save();
+
+      await ListingModel.findByIdAndUpdate(transaction.listing, {
+        status: ListingStatus.PUBLISHED,
+      });
+
+      const listing = await ListingModel.findById(transaction.listing).select('title');
+      const buyer = await UserModel.findById(transaction.buyer).select('email firstName');
+      if (buyer) {
+        EmailService.sendTransactionPaymentFailed({
+          to: buyer.email,
+          firstName: buyer.firstName,
+          transactionId: String(transaction._id),
+          listingTitle: listing?.title ?? 'Annonce',
+        }).catch(() => {});
+      }
       return;
     }
 
@@ -237,6 +308,31 @@ export class PaymentService {
     });
     locked.escrowStatus = TransactionState.ESCROW_ACTIVE;
     await locked.save();
+
+    // Emails de confirmation — C'est à ce moment précis (paiement réellement
+    // reçu) qu'ils ont leur sens, PAS à la création de la transaction qui se
+    // contente de réserver l'annonce. Découplés du provider: best effort.
+    {
+      const listing = await ListingModel.findById(locked.listing).select('title');
+      const [buyer, seller] = await Promise.all([
+        UserModel.findById(locked.buyer).select('email firstName'),
+        UserModel.findById(locked.seller).select('email firstName'),
+      ]);
+      const emailData = {
+        transactionId: String(locked._id),
+        listingTitle: listing?.title ?? 'Annonce',
+      };
+      if (buyer) {
+        EmailService.sendTransactionPaymentConfirmed({
+          to: buyer.email, firstName: buyer.firstName, role: 'buyer', ...emailData,
+        }).catch(() => {});
+      }
+      if (seller) {
+        EmailService.sendTransactionPaymentConfirmed({
+          to: seller.email, firstName: seller.firstName, role: 'seller', ...emailData,
+        }).catch(() => {});
+      }
+    }
 
     // §31 — hook affiliation: strictement après la confirmation du
     // paiement, découplé du PaymentProvider (§37). Ne fait rien si la

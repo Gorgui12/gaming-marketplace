@@ -150,21 +150,11 @@ export class TransactionsService {
       entityId: String(transaction._id),
     });
 
-    // Notifications email
+    // Notifications in-app UNIQUEMENT — aucun email ici : envoyer un email
+    // au clic "Acheter" serait prématuré (le paiement n'a pas encore eu
+    // lieu). Les emails partent à la confirmation réelle du paiement
+    // (PaymentService.applyPaymentConfirmation -> sendTransactionPaymentConfirmed).
     {
-      const { buyer, seller } = await loadParticipants(input.buyerId, String(listing.seller));
-      const emailData = {
-        transactionId: String(transaction._id),
-        listingTitle: listing.title,
-        amount: netPrice,
-        currency: listing.currency,
-      };
-      if (buyer) {
-        EmailService.sendTransactionCreated({ to: buyer.email, firstName: buyer.firstName, role: 'buyer', ...emailData }).catch(() => {});
-      }
-      if (seller) {
-        EmailService.sendTransactionCreated({ to: seller.email, firstName: seller.firstName, role: 'seller', ...emailData }).catch(() => {});
-      }
       NotificationService.create({
         userId: input.buyerId,
         type: NotificationType.PAYMENT_RECEIVED,

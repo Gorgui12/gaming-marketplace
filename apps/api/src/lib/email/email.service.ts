@@ -62,6 +62,16 @@ export class EmailService {
     await this.send(params.to, subject, html);
   }
 
+  static async sendTransactionPaymentFailed(params: {
+    to: string;
+    firstName: string;
+    transactionId: string;
+    listingTitle: string;
+  }) {
+    const { subject, html } = emailTemplates.transactionPaymentFailed(params);
+    await this.send(params.to, subject, html);
+  }
+
   static async sendTransactionDelivered(params: {
     to: string;
     firstName: string;
