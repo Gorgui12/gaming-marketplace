@@ -5,6 +5,13 @@
 process.env.NODE_ENV = 'test';
 process.env.MONGODB_URI = 'mongodb://localhost:27017/test';
 process.env.SESSION_SECRET = 'test-session-secret-at-least-32-chars-long';
+// Provider actif forcé sur unitechpay dans les tests (cf. tests
+// payments.service.test.ts, qui mocke unitechpay.provider.js). Les clés
+// PayDunya sont gardées (validité du schéma si un futur test les mocke),
+// et la validation croisée n'exige que UNITECHPAY_API_KEY ici.
+process.env.PAYMENT_PROVIDER = 'unitechpay';
+process.env.UNITECHPAY_API_KEY = 'test-unitechpay-api-key';
+process.env.UNITECHPAY_BASE_URL = 'https://api.unitech.sn/api.php';
 process.env.PAYDUNYA_MASTER_KEY = 'test-master-key';
 process.env.PAYDUNYA_PRIVATE_KEY = 'test-private-key';
 process.env.PAYDUNYA_PUBLIC_KEY = 'test-public-key';

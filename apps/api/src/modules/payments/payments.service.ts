@@ -8,6 +8,7 @@ import { TransactionModel, type TransactionDocument } from '../transactions/tran
 import { ListingModel } from '../listings/listing.model.js';
 import { assertTransition } from '../transactions/transaction-state-machine.js';
 import { PayDunyaProvider } from './providers/paydunya.provider.js';
+import { UnitechPayProvider } from './providers/unitechpay.provider.js';
 import type {
   PaymentProvider,
   ProviderPaymentStatus,
@@ -19,8 +20,10 @@ import { AffiliateCommissionService } from '../affiliates/affiliate-commission.s
 
 // Point unique de sélection du provider actif. Ajouter un nouveau provider
 // (Stripe, Paddle...) = créer une classe qui implémente PaymentProvider et
-// changer cette ligne, sans toucher au reste du système transactionnel.
-const provider: PaymentProvider = new PayDunyaProvider();
+// changer cette ligne, sans toucher au reste du système transactionnel. Le
+// choix se pilote par PAYMENT_PROVIDER dans .env (paydunya | unitechpay).
+const provider: PaymentProvider =
+  env.PAYMENT_PROVIDER === 'unitechpay' ? new UnitechPayProvider() : new PayDunyaProvider();
 
 export class PaymentService {
   static async initiateForTransaction(input: {
@@ -139,7 +142,13 @@ export class PaymentService {
   ): Promise<void> {
     const event: WebhookEvent = await provider.parseWebhook(rawBody, headers);
 
-    const transaction = await TransactionModel.findOne({ paymentReference: event.reference });
+    // Deux providers, deux façons de référencer la transaction:
+    //  - PayDunya: notre paymentReference interne (custom_data.internal_reference)
+    //  - UnitechPay: son propre transaction_id, stocké dans providerTransactionId
+    // La recherche $or couvre les deux sans rien casser.
+    const transaction = await TransactionModel.findOne({
+      $or: [{ paymentReference: event.reference }, { providerTransactionId: event.reference }],
+    });
     if (!transaction) {
       logger.warn({ reference: event.reference }, 'Webhook reçu pour transaction inconnue');
       return;
@@ -148,7 +157,9 @@ export class PaymentService {
     try {
       await PaymentEventModel.create({
         transaction: transaction._id,
-        provider: 'paydunya',
+        // Audit trail: le vrai prestataire ayant traité l'évènement, pas
+        // une valeur en dur.
+        provider: env.PAYMENT_PROVIDER,
         providerEventId: event.providerEventId,
         rawPayload: event.rawPayload,
       });

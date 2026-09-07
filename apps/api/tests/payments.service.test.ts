@@ -6,15 +6,22 @@ const fakeTransactionModel = createFakeModel();
 const fakePaymentEventModel = createFakeModel();
 const pristinePaymentEventCreate = fakePaymentEventModel.create.bind(fakePaymentEventModel);
 
-// Le webhook PayDunya lui-même (hash, format IPN) est mocké ici — on ne
-// teste pas l'intégration PayDunya réelle contre leurs vrais serveurs,
-// seulement la logique d'idempotence et de progression de la transaction
-// UNE FOIS l'event du provider parsé. Idem pour la vérification active
-// (invoice.confirm) utilisée par syncPaymentStatus.
+// Le webhook du provider actif lui-même (signature, format) est mocké ici
+// — on ne teste pas l'intégration réelle contre les vrais serveurs, seulement
+// la logique d'idempotence et de progression de la transaction UNE FOIS
+// l'event du provider parsé. Idem pour la vérification active utilisée par
+// syncPaymentStatus.
+//
+// Le provider actif est determiné par env.PAYMENT_PROVIDER au moment de
+// l'import de payments.service.js, donc AVANT que ce fichier ne puisse le
+// changer dynamiquement. C'est pourquoi setup-env.ts force
+// PAYMENT_PROVIDER=unitechpay, et que ce test mocke unitechpay.provider.js
+// (les mêmes garanties s'appliquent à PayDunya, mocké de la même façon
+// quand il était le provider par défaut).
 const parseWebhookMock = vi.fn();
 const verifyTransactionMock = vi.fn();
-vi.mock('../src/modules/payments/providers/paydunya.provider.js', () => ({
-  PayDunyaProvider: vi.fn().mockImplementation(() => ({
+vi.mock('../src/modules/payments/providers/unitechpay.provider.js', () => ({
+  UnitechPayProvider: vi.fn().mockImplementation(() => ({
     parseWebhook: parseWebhookMock,
     verifyTransaction: verifyTransactionMock,
   })),
