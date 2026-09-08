@@ -1,28 +1,77 @@
+import dns from 'node:dns';
+import net from 'node:net';
 import nodemailer from 'nodemailer';
 import { logger } from '../logger.js';
 import { env } from '../../config/env.js';
 import { emailTemplates } from './email.templates.js';
 
-export const smtpTransporter = nodemailer.createTransport({
-  host: env.SMTP_HOST,
-  port: env.SMTP_PORT,
-  secure: env.SMTP_PORT === 465,
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASSWORD,
-  },
+const TIMEOUTS = {
   // Timeouts explicites : si le port est bloqué (ex: cloud) ou le serveur
   // muet, on échoue vite et le log est distinctif — sinon nodemailer peut
   // attendre ~2 minutes par email et multiplier les envois fantômes.
   connectionTimeout: 15_000,
   greetingTimeout: 15_000,
   socketTimeout: 30_000,
-});
+} as const;
+
+/**
+ * Construit un transport SMTP dont la connexion est pilotée IPv4.
+ *
+ * nodemailer mélange les records A + AAAA de l'hôte et en choisit un de façon
+ * aléatoire : sur les plateformes sans route IPv6 (Railway, etc.) ça peut
+ * partir en `ENETUNREACH` sur l'adresse IPv6 au lieu de retomber sur l'IPv4 —
+ * et le message d'erreur exposé est alors trompeur. Ici on résout nous-mêmes
+ * l'IPv4 (les serveurs LWS en ont toujours) et on garde le hostname d'origine
+ * comme `servername` pour que SNI + vérification du certificat TLS restent
+ * valides (ça marche aussi bien en 465 direct qu'en 587 STARTTLS).
+ */
+async function buildTransporter(opts: { host?: string; port?: number; secure?: boolean }) {
+  const hostname = opts.host || env.SMTP_HOST;
+  const port = opts.port ?? env.SMTP_PORT;
+  const secure = opts.secure ?? env.SMTP_PORT === 465;
+
+  let host = hostname;
+  let tls: { servername: string } | undefined;
+  if (!net.isIP(hostname)) {
+    try {
+      const { address } = await dns.promises.lookup(hostname, { family: 4 });
+      host = address;
+      tls = { servername: hostname };
+    } catch {
+      // Garde-fou : si la résolution IPv4 échoue, on laisse nodemailer
+      // résoudre lui-même plutôt que de bloquer l'envoi.
+    }
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASSWORD,
+    },
+    tls,
+    ...TIMEOUTS,
+  });
+}
+
+type SmtpTransporter = ReturnType<typeof nodemailer.createTransport>;
+
+let globalTransporter: Promise<SmtpTransporter> | null = null;
+
+async function getSmtpTransporter(): Promise<SmtpTransporter> {
+  if (!globalTransporter) {
+    globalTransporter = buildTransporter({});
+  }
+  return globalTransporter;
+}
 
 export class EmailService {
   private static async send(to: string, subject: string, html: string) {
     try {
-      await smtpTransporter.sendMail({
+      const transporter = await getSmtpTransporter();
+      await transporter.sendMail({
         from: env.SMTP_FROM,
         to,
         subject,
@@ -53,7 +102,8 @@ export class EmailService {
    */
   static async verifyConnection(): Promise<{ ok: boolean; error?: string }> {
     try {
-      await smtpTransporter.verify();
+      const transporter = await getSmtpTransporter();
+      await transporter.verify();
       return { ok: true };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -107,15 +157,12 @@ export class EmailService {
     const port = overrides?.port ?? env.SMTP_PORT;
     const secure = overrides?.secure ?? env.SMTP_PORT === 465;
 
-    const testTransporter =
-      overrides?.host || overrides?.port !== undefined || overrides?.secure !== undefined
-        ? nodemailer.createTransport({
-            host,
-            port,
-            secure,
-            auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD },
-          })
-        : smtpTransporter;
+    const hasOverrides =
+      overrides?.host || overrides?.port !== undefined || overrides?.secure !== undefined;
+
+    const testTransporter = hasOverrides
+      ? await buildTransporter({ host, port, secure })
+      : await getSmtpTransporter();
 
     try {
       await testTransporter.verify();
