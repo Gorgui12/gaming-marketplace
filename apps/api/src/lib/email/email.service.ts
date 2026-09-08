@@ -62,22 +62,52 @@ export class EmailService {
   /**
    * Diagnostic complet pour le back-office (/api/v1/admin/email/test) :
    * 1) connexion + auth SMTP, 2) envoi d'un email de test (optionnel).
+   * `overrides` permet de tester un hôte/port alternatif (ex: port 587)
+   * SANS toucher au .env — le transport du diagnostic est temporaire.
    */
-  static async testSmtp(sendTo?: string): Promise<{
+  static async testSmtp(
+    sendTo?: string,
+    overrides?: { host?: string; port?: number; secure?: boolean },
+  ): Promise<{
     ok: boolean;
     stage: 'connexion' | 'envoi';
+    usedHost?: string;
+    usedPort?: number;
     error?: string;
     message?: string;
   }> {
-    const connection = await this.verifyConnection();
-    if (!connection.ok) {
-      return { ok: false, stage: 'connexion', error: connection.error };
+    const host = overrides?.host || env.SMTP_HOST;
+    const port = overrides?.port ?? env.SMTP_PORT;
+    const secure = overrides?.secure ?? env.SMTP_PORT === 465;
+
+    const testTransporter =
+      overrides?.host || overrides?.port !== undefined || overrides?.secure !== undefined
+        ? nodemailer.createTransport({
+            host,
+            port,
+            secure,
+            auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD },
+          })
+        : smtpTransporter;
+
+    try {
+      await testTransporter.verify();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn({ usedHost: host, usedPort: port, err }, 'Échec connexion SMTP (test)');
+      return { ok: false, stage: 'connexion', usedHost: host, usedPort: port, error: message };
     }
     if (!sendTo) {
-      return { ok: true, stage: 'connexion', message: 'SMTP joignable et authentifié' };
+      return {
+        ok: true,
+        stage: 'connexion',
+        usedHost: host,
+        usedPort: port,
+        message: 'SMTP joignable et authentifié',
+      };
     }
     try {
-      await smtpTransporter.sendMail({
+      await testTransporter.sendMail({
         from: env.SMTP_FROM,
         to: sendTo,
         subject: `Test SMTP GamingMarket — ${new Date().toLocaleString('fr-FR')}`,
@@ -86,12 +116,16 @@ export class EmailService {
       return {
         ok: true,
         stage: 'envoi',
+        usedHost: host,
+        usedPort: port,
         message: `Email de test envoyé vers ${sendTo}`,
       };
     } catch (err) {
       return {
         ok: false,
         stage: 'envoi',
+        usedHost: host,
+        usedPort: port,
         error: err instanceof Error ? err.message : String(err),
       };
     }

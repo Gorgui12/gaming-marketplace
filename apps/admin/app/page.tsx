@@ -39,8 +39,10 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState('');
   const [smtpBusy, setSmtpBusy] = useState(false);
   const [smtpTo, setSmtpTo] = useState('');
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('');
   const [smtpResult, setSmtpResult] = useState<
-    { ok: boolean; stage: string; error?: string; message?: string } | null
+    { ok: boolean; stage: string; usedHost?: string; usedPort?: number; error?: string; message?: string } | null
   >(null);
 
   const load = useCallback(async () => {
@@ -61,10 +63,14 @@ export default function AdminDashboardPage() {
     setError('');
     try {
       const data = await apiFetch<{
-        result: { ok: boolean; stage: string; error?: string; message?: string };
+        result: { ok: boolean; stage: string; usedHost?: string; usedPort?: number; error?: string; message?: string };
       }>('/api/v1/admin/email/test', {
         method: 'POST',
-        json: { to: smtpTo.trim() || undefined },
+        json: {
+          to: smtpTo.trim() || undefined,
+          host: smtpHost.trim() || undefined,
+          port: smtpPort.trim() ? Number(smtpPort.trim()) : undefined,
+        },
       });
       setSmtpResult(data.result);
     } catch (err) {
@@ -94,6 +100,23 @@ export default function AdminDashboardPage() {
             {smtpBusy ? 'Test…' : 'Tester le SMTP'}
           </button>
         </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            value={smtpHost}
+            onChange={(e) => setSmtpHost(e.target.value)}
+            placeholder="Hôte SMTP (défaut : .env — ex: smtp.lwspanel.com)"
+            className="flex-1 min-w-[240px] rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-xs text-bone outline-none focus:border-gold"
+          />
+          <input
+            value={smtpPort}
+            onChange={(e) => setSmtpPort(e.target.value)}
+            placeholder="Port (défaut : .env — ex: 587)"
+            className="w-36 rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-xs text-bone outline-none focus:border-gold"
+          />
+        </div>
+        <p className="mt-1 text-[11px] text-bone/40">
+          Si le port 465 timeout, essaie 587 (STARTTLS) — de nombreux hébergeurs bloquent 465 en sortie.
+        </p>
         {smtpResult && (
           <div
             className={`mt-3 rounded-lg px-3 py-2 text-xs ${
@@ -101,8 +124,8 @@ export default function AdminDashboardPage() {
             }`}
           >
             {smtpResult.ok
-              ? `✔ Connexion SMTP OK${smtpResult.message ? ` — ${smtpResult.message}` : ''}`
-              : `✘ Échec (${smtpResult.stage === 'connexion' ? 'connexion' : 'envoi'}) : ${smtpResult.error ?? 'erreur inconnue'}`}
+              ? `✔ OK ${smtpResult.usedHost}:${smtpResult.usedPort}${smtpResult.message ? ` — ${smtpResult.message}` : ''}`
+              : `✘ Échec (${smtpResult.stage === 'connexion' ? 'connexion' : 'envoi'}) ${smtpResult.usedHost}:${smtpResult.usedPort} — ${smtpResult.error ?? 'erreur inconnue'}`}
           </div>
         )}
       </Panel>
