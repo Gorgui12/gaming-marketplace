@@ -1,5 +1,10 @@
 import type { Request, Response } from 'express';
-import { reviewAffiliateApplicationSchema, updateAffiliateSchema } from '@gm/validation';
+import {
+  reviewAffiliateApplicationSchema,
+  updateAffiliateSchema,
+  changeAffiliateTierSchema,
+  updateAffiliateTierSchema,
+} from '@gm/validation';
 import { asyncHandler } from '../../../lib/async-handler.js';
 import { AffiliateService } from '../affiliate.service.js';
 import { AffiliateModel } from '../affiliate.model.js';
@@ -29,6 +34,16 @@ export const updateAffiliate = asyncHandler(async (req: Request, res: Response) 
   if (!affiliate) {
     throw AppError.notFound(ErrorCode.NOT_FOUND, 'Affilié introuvable');
   }
+  if (input.tierSlug) {
+    await AffiliateService.changeTier({
+      affiliateId: String(affiliate._id),
+      adminId: req.user!.id,
+      tierSlug: input.tierSlug,
+      commissionRate: input.commissionRate,
+    });
+    res.status(200).json({ success: true, data: { affiliate } });
+    return;
+  }
   if (input.status) {
     await AffiliateService.setStatus({
       affiliateId: String(affiliate._id),
@@ -40,6 +55,31 @@ export const updateAffiliate = asyncHandler(async (req: Request, res: Response) 
     affiliate.commissionRate = input.commissionRate;
     await affiliate.save();
   }
+  res.status(200).json({ success: true, data: { affiliate } });
+});
+
+export const listTiers = asyncHandler(async (_req: Request, res: Response) => {
+  const tiers = await AffiliateService.listTiers();
+  res.status(200).json({ success: true, data: { tiers } });
+});
+
+export const updateTier = asyncHandler(async (req: Request, res: Response) => {
+  const input = updateAffiliateTierSchema.parse(req.body);
+  const tier = await AffiliateService.updateTier({
+    tierId: req.params.id!,
+    adminId: req.user!.id,
+    ...input,
+  });
+  res.status(200).json({ success: true, data: { tier } });
+});
+
+export const changeTier = asyncHandler(async (req: Request, res: Response) => {
+  const input = changeAffiliateTierSchema.parse(req.body);
+  const affiliate = await AffiliateService.changeTier({
+    affiliateId: req.params.id!,
+    adminId: req.user!.id,
+    ...input,
+  });
   res.status(200).json({ success: true, data: { affiliate } });
 });
 

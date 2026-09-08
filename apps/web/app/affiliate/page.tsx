@@ -18,6 +18,13 @@ const STEPS = [
   { n: '05', title: 'Recevez vos commissions', body: 'Suivez vos gains en temps réel.' },
 ];
 
+const TIERS = [
+  { rate: '3 %', name: 'Débutant', min: '0' },
+  { rate: '5 %', name: 'Confirmé', min: '10' },
+  { rate: '7 %', name: 'Avancé', min: '50' },
+  { rate: '9 %', name: 'Expert', min: '150' },
+];
+
 export default function AffiliateLandingPage() {
   return (
     <>
@@ -56,7 +63,7 @@ export default function AffiliateLandingPage() {
               <Advantage
                 icon={<TrendingUp className="h-5 w-5" />}
                 title="Commissions évolutives"
-                body="Du niveau Starter à Ambassador, le taux progresse avec vous."
+                body="4 niveaux : 3 %, 5 %, 7 % et 9 % sur le montant net de chaque vente."
               />
               <Advantage
                 icon={<BarChart3 className="h-5 w-5" />}
@@ -68,6 +75,29 @@ export default function AffiliateLandingPage() {
                 title="Paiements suivis"
                 body="Chaque commission est tracée du clic jusqu'au paiement."
               />
+            </div>
+          </div>
+        </section>
+
+        {/* Niveaux de commission */}
+        <section className="border-b border-white/10 bg-navy">
+          <div className="mx-auto max-w-4xl px-5 py-16">
+            <h2 className="font-display text-2xl text-bone">4 niveaux de commission</h2>
+            <p className="mt-2 max-w-xl text-sm text-bone/60">
+              Votre taux est appliqué sur le montant net de chaque transaction générée
+              (hors commission plateforme) — plus vous progressez, plus vous gagnez.
+            </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-4">
+              {TIERS.map((t) => (
+                <div
+                  key={t.rate}
+                  className="rounded-ticket border border-white/10 bg-navy-mid p-5 text-center"
+                >
+                  <p className="font-display text-3xl text-gold">{t.rate}</p>
+                  <p className="mt-1 text-sm font-medium text-bone">{t.name}</p>
+                  <p className="mt-1 text-xs text-bone/50">à partir de {t.min} conversions</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>

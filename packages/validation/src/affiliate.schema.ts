@@ -84,6 +84,19 @@ export const updateAffiliateSchema = z.object({
 });
 export type UpdateAffiliateInput = z.infer<typeof updateAffiliateSchema>;
 
+export const changeAffiliateTierSchema = z.object({
+  tierSlug: z.string().min(1),
+  commissionRate: z.number().min(0).max(1).optional(),
+});
+export type ChangeAffiliateTierInput = z.infer<typeof changeAffiliateTierSchema>;
+
+export const updateAffiliateTierSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  defaultCommissionRate: z.number().min(0).max(1),
+  minConversionsToUpgrade: z.number().int().nonnegative().optional(),
+});
+export type UpdateAffiliateTierInput = z.infer<typeof updateAffiliateTierSchema>;
+
 export const createPromoCodeSchema = z.object({
   code: z.string().min(3).max(30),
   affiliateId: z.string().optional(),

@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import argon2 from 'argon2';
 import { UserRole } from '@gm/types';
-import { GAMES_SEED } from '@gm/config';
+import { GAMES_SEED, AFFILIATE_TIERS_SEED } from '@gm/config';
 import { connectDb, disconnectDb } from '../lib/db.js';
 import { GameModel } from '../modules/games/game.model.js';
 import { UserModel } from '../modules/users/user.model.js';
+import { AffiliateTierModel } from '../modules/affiliates/affiliate-tier.model.js';
 import { logger } from '../lib/logger.js';
 import { env } from '../config/env.js';
 
@@ -19,6 +20,11 @@ async function seed(): Promise<void> {
     await GameModel.findOneAndUpdate({ slug: game.slug }, game, { upsert: true, new: true });
   }
   logger.info(`${GAMES_SEED.length} jeu(x) seedé(s)`);
+
+  for (const tier of AFFILIATE_TIERS_SEED) {
+    await AffiliateTierModel.findOneAndUpdate({ slug: tier.slug }, tier, { upsert: true, new: true });
+  }
+  logger.info(`${AFFILIATE_TIERS_SEED.length} niveau(x) d'affilié seedé(s)`);
 
   const devAdminEmail = 'admin@dev.local';
   const existingAdmin = await UserModel.findOne({ email: devAdminEmail });

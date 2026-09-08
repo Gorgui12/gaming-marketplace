@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { computeFee, DEFAULT_FEE_RULE, type FeeRule } from '../src/fees.js';
 
 describe('computeFee', () => {
-  it('applies the default 10% rate above the minimum threshold', () => {
-    expect(computeFee(50_000)).toBe(5_000);
+  it('applies the default 15% rate above the minimum threshold', () => {
+    // 15% de 50 000 = 7 500
+    expect(computeFee(50_000)).toBe(7_500);
   });
 
   it('enforces the minimum fee on small transactions', () => {

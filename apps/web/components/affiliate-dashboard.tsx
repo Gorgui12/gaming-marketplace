@@ -15,6 +15,7 @@ interface AffiliateData {
   totalCommission: number;
   pendingCommission: number;
   availableCommission: number;
+  tier?: { _id: string; name: string; slug: string; defaultCommissionRate: number };
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -117,8 +118,8 @@ export function AffiliateDashboard() {
           value={`${affiliate.totalRevenue.toLocaleString('fr-FR')} FCFA`}
         />
         <StatCard
-          label="Taux de commission"
-          value={`${(affiliate.commissionRate * 100).toFixed(0)}%`}
+          label="Niveau / Taux"
+          value={`${affiliate.tier?.name ?? '—'} · ${(affiliate.commissionRate * 100).toFixed(0)}%`}
         />
       </div>
 

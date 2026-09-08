@@ -37,6 +37,9 @@ const XOF = new Intl.NumberFormat('fr-FR');
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState('');
+  const [smtpStatus, setSmtpStatus] = useState<
+    { ok: boolean; host: string; port: number; secure: boolean; error?: string } | null | undefined
+  >(undefined);
   const [smtpBusy, setSmtpBusy] = useState(false);
   const [smtpTo, setSmtpTo] = useState('');
   const [smtpHost, setSmtpHost] = useState('');
@@ -53,9 +56,21 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  const loadSmtpStatus = useCallback(async () => {
+    try {
+      const data = await apiFetch<{
+        status: { ok: boolean; host: string; port: number; secure: boolean; error?: string };
+      }>('/api/v1/admin/email/status');
+      setSmtpStatus(data.status);
+    } catch {
+      setSmtpStatus(null);
+    }
+  }, []);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadSmtpStatus();
+  }, [load, loadSmtpStatus]);
 
   async function testEmail() {
     setSmtpBusy(true);
@@ -83,6 +98,49 @@ export default function AdminDashboardPage() {
   return (
     <AdminShell title="Dashboard">
       {error && <p className="mb-4 text-sm text-coral">{error}</p>}
+
+      {smtpStatus !== undefined && (
+        <div
+          className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-ticket border px-4 py-3 text-sm ${
+            smtpStatus && smtpStatus.ok
+              ? 'border-mint/30 bg-mint/10'
+              : 'border-coral/30 bg-coral/10'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {smtpStatus && smtpStatus.ok ? (
+              <span className="font-mono text-xs text-mint">● SMTP OK</span>
+            ) : smtpStatus ? (
+              <span className="font-mono text-xs text-coral">● SMTP KO</span>
+            ) : (
+              <span className="font-mono text-xs text-coral">● SMTP KO (indisponible)</span>
+            )}
+            {smtpStatus && (
+              <span className="font-mono text-[11px] text-bone/50">
+                {smtpStatus.host}:{smtpStatus.port} · {smtpStatus.secure ? 'SSL' : 'STARTTLS'}
+              </span>
+            )}
+          </div>
+          {smtpStatus && !smtpStatus.ok && (
+            <p className="text-xs text-coral/90">
+              Les emails ne partent pas. {smtpStatus.error ?? 'Erreur SMTP inconnue.'} — testez ci-dessous
+              (port 587 en alternative si 465 est bloqué).
+            </p>
+          )}
+          {smtpStatus && smtpStatus.ok && (
+            <p className="text-xs text-mint/80">Email de bienvenue : partent normalement.</p>
+          )}
+          <button
+            onClick={() => {
+              setSmtpStatus(undefined);
+              loadSmtpStatus();
+            }}
+            className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30"
+          >
+            Re-tester
+          </button>
+        </div>
+      )}
 
       <Panel title="Diagnostic email (SMTP)">
         <div className="flex flex-wrap items-center gap-2">

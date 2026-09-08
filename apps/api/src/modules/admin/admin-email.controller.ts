@@ -21,3 +21,8 @@ export const testSmtp = asyncHandler(async (req: Request, res: Response) => {
   // le front admin l'affiche — un SMTP KO n'est pas une erreur HTTP.
   res.status(200).json({ success: true, data: { result } });
 });
+
+export const getSmtpStatus = asyncHandler(async (_req: Request, res: Response) => {
+  const status = await EmailService.getStatus();
+  res.status(200).json({ success: true, data: { status } });
+});

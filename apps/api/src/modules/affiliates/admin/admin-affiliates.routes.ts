@@ -3,10 +3,13 @@ import { UserRole } from '@gm/types';
 import { requireAuth } from '../../../middlewares/auth.middleware.js';
 import { requireRole } from '../../../middlewares/rbac.middleware.js';
 import {
+  changeTier,
   getAffiliateConversions,
   listAffiliates,
+  listTiers,
   reviewApplication,
   updateAffiliate,
+  updateTier,
 } from './admin-affiliates.controller.js';
 import {
   createPromoCode,
@@ -24,7 +27,12 @@ adminAffiliatesRouter.use(requireAuth, requireRole(UserRole.ADMIN, UserRole.SUPE
 adminAffiliatesRouter.get('/affiliates', listAffiliates);
 adminAffiliatesRouter.post('/affiliates/:id/review', reviewApplication);
 adminAffiliatesRouter.patch('/affiliates/:id', updateAffiliate);
+adminAffiliatesRouter.post('/affiliates/:id/tier', changeTier);
 adminAffiliatesRouter.get('/affiliates/:id/conversions', getAffiliateConversions);
+
+// /admin/affiliate-tiers
+adminAffiliatesRouter.get('/affiliate-tiers', listTiers);
+adminAffiliatesRouter.patch('/affiliate-tiers/:id', updateTier);
 
 // /admin/promo-codes
 adminAffiliatesRouter.get('/promo-codes', listPromoCodes);

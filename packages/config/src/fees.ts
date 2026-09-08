@@ -9,7 +9,7 @@ export interface FeeRule {
  * `PlatformSettings` en base, administrable depuis l'admin dashboard.
  */
 export const DEFAULT_FEE_RULE: FeeRule = {
-  transactionFeePercentage: 0.1,
+  transactionFeePercentage: 0.15,
   minimumFee: 500, // FCFA
 };
 

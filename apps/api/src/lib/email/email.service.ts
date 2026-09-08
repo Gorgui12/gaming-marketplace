@@ -11,6 +11,12 @@ export const smtpTransporter = nodemailer.createTransport({
     user: env.SMTP_USER,
     pass: env.SMTP_PASSWORD,
   },
+  // Timeouts explicites : si le port est bloqué (ex: cloud) ou le serveur
+  // muet, on échoue vite et le log est distinctif — sinon nodemailer peut
+  // attendre ~2 minutes par email et multiplier les envois fantômes.
+  connectionTimeout: 15_000,
+  greetingTimeout: 15_000,
+  socketTimeout: 30_000,
 });
 
 export class EmailService {
@@ -57,6 +63,27 @@ export class EmailService {
       );
       return { ok: false, error: message };
     }
+  }
+
+  /**
+   * État SMTP pour le dashboard admin (GET /api/v1/admin/email/status) —
+   * visible immédiatement sur la plateforme, sans secret exposé.
+   */
+  static async getStatus(): Promise<{
+    ok: boolean;
+    host: string;
+    port: number;
+    secure: boolean;
+    error?: string;
+  }> {
+    const result = await this.verifyConnection();
+    return {
+      ok: result.ok,
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      secure: env.SMTP_PORT === 465,
+      error: result.error,
+    };
   }
 
   /**
