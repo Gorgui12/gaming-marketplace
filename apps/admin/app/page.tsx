@@ -37,15 +37,13 @@ const XOF = new Intl.NumberFormat('fr-FR');
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState('');
-  const [smtpStatus, setSmtpStatus] = useState<
-    { ok: boolean; host: string; port: number; secure: boolean; error?: string } | null | undefined
+  const [emailStatus, setEmailStatus] = useState<
+    { ok: boolean; provider: string; from: string; error?: string } | null | undefined
   >(undefined);
-  const [smtpBusy, setSmtpBusy] = useState(false);
-  const [smtpTo, setSmtpTo] = useState('');
-  const [smtpHost, setSmtpHost] = useState('');
-  const [smtpPort, setSmtpPort] = useState('');
-  const [smtpResult, setSmtpResult] = useState<
-    { ok: boolean; stage: string; usedHost?: string; usedPort?: number; error?: string; message?: string } | null
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailResult, setEmailResult] = useState<
+    { ok: boolean; stage: string; error?: string; message?: string } | null
   >(null);
 
   const load = useCallback(async () => {
@@ -56,42 +54,40 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  const loadSmtpStatus = useCallback(async () => {
+  const loadEmailStatus = useCallback(async () => {
     try {
       const data = await apiFetch<{
-        status: { ok: boolean; host: string; port: number; secure: boolean; error?: string };
+        status: { ok: boolean; provider: string; from: string; error?: string };
       }>('/api/v1/admin/email/status');
-      setSmtpStatus(data.status);
+      setEmailStatus(data.status);
     } catch {
-      setSmtpStatus(null);
+      setEmailStatus(null);
     }
   }, []);
 
   useEffect(() => {
     load();
-    loadSmtpStatus();
-  }, [load, loadSmtpStatus]);
+    loadEmailStatus();
+  }, [load, loadEmailStatus]);
 
   async function testEmail() {
-    setSmtpBusy(true);
-    setSmtpResult(null);
+    setEmailBusy(true);
+    setEmailResult(null);
     setError('');
     try {
       const data = await apiFetch<{
-        result: { ok: boolean; stage: string; usedHost?: string; usedPort?: number; error?: string; message?: string };
+        result: { ok: boolean; stage: string; error?: string; message?: string };
       }>('/api/v1/admin/email/test', {
         method: 'POST',
         json: {
-          to: smtpTo.trim() || undefined,
-          host: smtpHost.trim() || undefined,
-          port: smtpPort.trim() ? Number(smtpPort.trim()) : undefined,
+          to: emailTo.trim() || undefined,
         },
       });
-      setSmtpResult(data.result);
+      setEmailResult(data.result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur du test SMTP');
+      setError(err instanceof Error ? err.message : 'Erreur du test email');
     } finally {
-      setSmtpBusy(false);
+      setEmailBusy(false);
     }
   }
 
@@ -99,41 +95,40 @@ export default function AdminDashboardPage() {
     <AdminShell title="Dashboard">
       {error && <p className="mb-4 text-sm text-coral">{error}</p>}
 
-      {smtpStatus !== undefined && (
+      {emailStatus !== undefined && (
         <div
           className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-ticket border px-4 py-3 text-sm ${
-            smtpStatus && smtpStatus.ok
+            emailStatus && emailStatus.ok
               ? 'border-mint/30 bg-mint/10'
               : 'border-coral/30 bg-coral/10'
           }`}
         >
           <div className="flex items-center gap-2">
-            {smtpStatus && smtpStatus.ok ? (
-              <span className="font-mono text-xs text-mint">● SMTP OK</span>
-            ) : smtpStatus ? (
-              <span className="font-mono text-xs text-coral">● SMTP KO</span>
+            {emailStatus && emailStatus.ok ? (
+              <span className="font-mono text-xs text-mint">● Email OK</span>
+            ) : emailStatus ? (
+              <span className="font-mono text-xs text-coral">● Email KO</span>
             ) : (
-              <span className="font-mono text-xs text-coral">● SMTP KO (indisponible)</span>
+              <span className="font-mono text-xs text-coral">● Email KO (indisponible)</span>
             )}
-            {smtpStatus && (
+            {emailStatus && (
               <span className="font-mono text-[11px] text-bone/50">
-                {smtpStatus.host}:{smtpStatus.port} · {smtpStatus.secure ? 'SSL' : 'STARTTLS'}
+                {emailStatus.provider} · {emailStatus.from}
               </span>
             )}
           </div>
-          {smtpStatus && !smtpStatus.ok && (
+          {emailStatus && !emailStatus.ok && (
             <p className="text-xs text-coral/90">
-              Les emails ne partent pas. {smtpStatus.error ?? 'Erreur SMTP inconnue.'} — testez ci-dessous
-              (port 587 en alternative si 465 est bloqué).
+              Les emails ne partent pas. {emailStatus.error ?? 'Erreur email inconnue.'} — testez ci-dessous
             </p>
           )}
-          {smtpStatus && smtpStatus.ok && (
-            <p className="text-xs text-mint/80">Email de bienvenue : partent normalement.</p>
+          {emailStatus && emailStatus.ok && (
+            <p className="text-xs text-mint/80">Emails de bienvenue : partent normalement.</p>
           )}
           <button
             onClick={() => {
-              setSmtpStatus(undefined);
-              loadSmtpStatus();
+              setEmailStatus(undefined);
+              loadEmailStatus();
             }}
             className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/70 hover:border-white/30"
           >
@@ -142,48 +137,34 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      <Panel title="Diagnostic email (SMTP)">
+      <Panel title="Diagnostic email (Resend API)">
         <div className="flex flex-wrap items-center gap-2">
           <input
-            value={smtpTo}
-            onChange={(e) => setSmtpTo(e.target.value)}
+            value={emailTo}
+            onChange={(e) => setEmailTo(e.target.value)}
             placeholder="Email pour l'envoi de test (optionnel)"
             className="flex-1 min-w-[220px] rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-sm text-bone outline-none focus:border-gold"
           />
           <button
-            disabled={smtpBusy}
+            disabled={emailBusy}
             onClick={testEmail}
             className="rounded-full bg-gold px-5 py-2 text-sm font-semibold text-navy-deep hover:bg-gold-soft disabled:opacity-60"
           >
-            {smtpBusy ? 'Test…' : 'Tester le SMTP'}
+            {emailBusy ? 'Test…' : 'Tester l\'envoi'}
           </button>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            value={smtpHost}
-            onChange={(e) => setSmtpHost(e.target.value)}
-            placeholder="Hôte SMTP (défaut : .env — ex: smtp.lwspanel.com)"
-            className="flex-1 min-w-[240px] rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-xs text-bone outline-none focus:border-gold"
-          />
-          <input
-            value={smtpPort}
-            onChange={(e) => setSmtpPort(e.target.value)}
-            placeholder="Port (défaut : .env — ex: 587)"
-            className="w-36 rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-xs text-bone outline-none focus:border-gold"
-          />
-        </div>
         <p className="mt-1 text-[11px] text-bone/40">
-          Si le port 465 timeout, essaie 587 (STARTTLS) — de nombreux hébergeurs bloquent 465 en sortie.
+          Envoi via l'API Resend (HTTP) — aucun port SMTP nécessaire.
         </p>
-        {smtpResult && (
+        {emailResult && (
           <div
             className={`mt-3 rounded-lg px-3 py-2 text-xs ${
-              smtpResult.ok ? 'bg-mint/15 text-mint' : 'bg-coral/15 text-coral'
+              emailResult.ok ? 'bg-mint/15 text-mint' : 'bg-coral/15 text-coral'
             }`}
           >
-            {smtpResult.ok
-              ? `✔ OK ${smtpResult.usedHost}:${smtpResult.usedPort}${smtpResult.message ? ` — ${smtpResult.message}` : ''}`
-              : `✘ Échec (${smtpResult.stage === 'connexion' ? 'connexion' : 'envoi'}) ${smtpResult.usedHost}:${smtpResult.usedPort} — ${smtpResult.error ?? 'erreur inconnue'}`}
+            {emailResult.ok
+              ? `✔ OK ${emailResult.message ?? 'Email envoyé'}`
+              : `✘ Échec (${emailResult.stage === 'connexion' ? 'connexion' : 'envoi'}) — ${emailResult.error ?? 'erreur inconnue'}`}
           </div>
         )}
       </Panel>

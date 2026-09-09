@@ -5,24 +5,17 @@ import { EmailService } from '../../lib/email/email.service.js';
 
 const testEmailSchema = z.object({
   to: z.string().email('Adresse email invalide').optional(),
-  // Overrides de diagnostic : permettent de tester un autre hôte/port SMTP
-  // (ex: port 587 STARTTLS) sans modifier le .env.
-  host: z.string().min(1).optional(),
-  port: z.coerce.number().int().positive().optional(),
 });
 
-export const testSmtp = asyncHandler(async (req: Request, res: Response) => {
+export const testEmail = asyncHandler(async (req: Request, res: Response) => {
   const input = testEmailSchema.parse(req.body ?? {});
-  const result = await EmailService.testSmtp(input.to, {
-    host: input.host,
-    port: input.port,
-  });
+  const result = await EmailService.testEmail(input.to);
   // Toujours 200 + success:true : le détail (ok/error) vit dans result et
-  // le front admin l'affiche — un SMTP KO n'est pas une erreur HTTP.
+  // le front admin l'affiche — un service KO n'est pas une erreur HTTP.
   res.status(200).json({ success: true, data: { result } });
 });
 
-export const getSmtpStatus = asyncHandler(async (_req: Request, res: Response) => {
+export const getEmailStatus = asyncHandler(async (_req: Request, res: Response) => {
   const status = await EmailService.getStatus();
   res.status(200).json({ success: true, data: { status } });
 });

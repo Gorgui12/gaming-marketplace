@@ -42,11 +42,8 @@ const envSchema = z.object({
   STORAGE_API_SECRET: z.string().optional(),
   STORAGE_CLOUD_NAME: z.string().optional(),
 
-  SMTP_HOST: z.string().min(1, 'SMTP_HOST est obligatoire'),
-  SMTP_PORT: z.coerce.number().default(465),
-  SMTP_USER: z.string().min(1, 'SMTP_USER est obligatoire'),
-  SMTP_PASSWORD: z.string().min(1, 'SMTP_PASSWORD est obligatoire'),
-  SMTP_FROM: z.string().min(1, 'SMTP_FROM est obligatoire'),
+  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY est obligatoire'),
+  RESEND_FROM: z.string().min(1, 'RESEND_FROM est obligatoire'),
 
   GOOGLE_CLIENT_ID: z.string().optional(),
 

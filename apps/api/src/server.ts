@@ -17,16 +17,16 @@ async function main(): Promise<void> {
     logger.info(`API démarrée sur le port ${env.API_PORT} (${env.NODE_ENV})`);
   });
 
-  // Diagnostic SMTP au démarrage : si le serveur de mail est injoignable
-  // (mauvaises clés, port bloqué par le cloud...), c'est visible dès le
-  // boot dans les logs — au lieu d'attendre le premier échec d'email.
-  const smtp = await EmailService.verifyConnection();
-  if (smtp.ok) {
-    logger.info({ smtpHost: env.SMTP_HOST, smtpPort: env.SMTP_PORT }, 'SMTP joignable au démarrage');
+  // Diagnostic Resend au démarrage : si l'API est injoignable (mauvaise clé,
+  // quota épuisé...), c'est visible dès le boot dans les logs — au lieu
+  // d'attendre le premier échec d'email.
+  const resend = await EmailService.verifyConnection();
+  if (resend.ok) {
+    logger.info({ from: env.RESEND_FROM }, 'Resend joignable au démarrage');
   } else {
     logger.warn(
-      { smtpHost: env.SMTP_HOST, smtpPort: env.SMTP_PORT, err: smtp.error },
-      'SMTP INJOIGNABLE au démarrage — les emails ne partiront pas. Vérifier SMTP_HOST/PORT/identifiants.',
+      { from: env.RESEND_FROM, err: resend.error },
+      'Resend INJOIGNABLE au démarrage — les emails ne partiront pas. Vérifier RESEND_API_KEY.',
     );
   }
 
