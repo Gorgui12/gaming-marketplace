@@ -10,6 +10,7 @@ import { getCountry } from '@gm/config';
 import { AuditService } from '../audit/audit.service.js';
 import { AffiliateAttributionService } from '../affiliates/affiliate-attribution.service.js';
 import { EmailService } from '../../lib/email/email.service.js';
+import { logger } from '../../lib/logger.js';
 import { env } from '../../config/env.js';
 
 const googleClient = env.GOOGLE_CLIENT_ID ? new OAuth2Client(env.GOOGLE_CLIENT_ID) : null;
@@ -113,7 +114,9 @@ export class AuthService {
 
     const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
 
-    EmailService.sendPasswordReset(user.email, user.firstName, resetUrl).catch(() => {});
+    EmailService.sendPasswordReset(user.email, user.firstName, resetUrl).catch((err) => {
+      logger.error({ err, email: user.email }, 'Échec envoi email reset password');
+    });
   }
 
   static async resetPassword(input: ResetPasswordInput) {
