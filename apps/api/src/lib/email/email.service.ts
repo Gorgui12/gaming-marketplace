@@ -5,11 +5,27 @@ import { emailTemplates } from './email.templates.js';
 
 const resend = new Resend(env.RESEND_API_KEY);
 
+/**
+ * Normalise RESEND_FROM : si l'environnement (docker env_file, provider
+ * PaaS…) a conservé les guillemets du `.env`, on les retire pour éviter
+ * `Invalid from field` chez Resend. Ne touche pas une valeur déjà propre.
+ */
+function normalizeFrom(raw: string): string {
+  let value = raw.trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
+  }
+  return value;
+}
+
 export class EmailService {
   private static async send(to: string, subject: string, html: string) {
     try {
       const { error } = await resend.emails.send({
-        from: env.RESEND_FROM,
+        from: normalizeFrom(env.RESEND_FROM),
         to,
         subject,
         html,
@@ -58,7 +74,7 @@ export class EmailService {
     return {
       ok: result.ok,
       provider: 'resend',
-      from: env.RESEND_FROM,
+      from: normalizeFrom(env.RESEND_FROM),
       error: result.error,
     };
   }
@@ -89,7 +105,7 @@ export class EmailService {
     }
     try {
       const { error } = await resend.emails.send({
-        from: env.RESEND_FROM,
+        from: normalizeFrom(env.RESEND_FROM),
         to: sendTo,
         subject: `Test Resend GamingMarket — ${new Date().toLocaleString('fr-FR')}`,
         html: '<p>Ceci est un email de test envoyé depuis le back-office de GamingMarket.</p>',
