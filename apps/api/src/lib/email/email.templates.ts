@@ -1,3 +1,5 @@
+import { env } from '../../config/env.js';
+
 /**
  * Échappe les caractères HTML spéciaux avant interpolation dans un
  * template email. Toute valeur d'origine utilisateur (firstName,
@@ -21,9 +23,9 @@ const BASE_STYLE = `
 `;
 
 // URL publique de l'app web, utilisée pour les boutons "call to action" des
-// emails. À définir côté serveur API (déploiement production) — sinon fallback
-// localhost pour le dev local.
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
+// emails. Configurée via APP_URL côté serveur API — remplace les anciens
+// fallbacks vers localhost.
+const APP_URL = env.APP_URL;
 
 const BUYER_DASHBOARD_URL = `${APP_URL}/dashboard/buyer`;
 const SELLER_DASHBOARD_URL = `${APP_URL}/dashboard/seller`;
@@ -85,7 +87,7 @@ export const emailTemplates = {
       <p style="margin:0 0 16px;">Bienvenue sur Gaming Marketplace ! Votre compte a été créé avec succès.</p>
       <p style="margin:0 0 16px;">Vous pouvez maintenant explorer les annonces, acheter ou vendre des comptes de jeux vidéo en toute sécurité.</p>
       <div style="text-align:center;margin:24px 0;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/marketplace" style="${BUTTON_STYLE}">Accéder à la marketplace</a>
+        <a href="${APP_URL}/marketplace" style="${BUTTON_STYLE}">Accéder à la marketplace</a>
       </div>
       <p style="margin:0;color:#94a3b8;font-size:13px;">Si vous avez des questions, répondez à cet email ou contactez-nous à support@gamingmarket.store</p>
     `;
@@ -254,7 +256,7 @@ export const emailTemplates = {
       <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">Votre annonce <strong>${listingTitle}</strong> a été approuvée et est désormais visible sur la marketplace.</p>
       <div style="text-align:center;margin:24px 0;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/marketplace" style="${BUTTON_STYLE}">Voir sur la marketplace</a>
+        <a href="${APP_URL}/marketplace" style="${BUTTON_STYLE}">Voir sur la marketplace</a>
       </div>
     `;
     return { subject: 'Annonce approuvée', html: wrap('Annonce publiée', body) };
@@ -285,7 +287,7 @@ export const emailTemplates = {
       <p style="margin:0 0 16px;">Votre annonce <strong>${listingTitle}</strong> a été supprimée par un administrateur et n'est plus disponible sur la marketplace.</p>
       <p style="margin:0 0 16px;">Vous pouvez créer une nouvelle annonce à tout moment si la suppression vous semble être une erreur.</p>
       <div style="text-align:center;margin:24px 0;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/seller/listings/new" style="${BUTTON_STYLE}">Créer une annonce</a>
+        <a href="${APP_URL}/dashboard/seller/listings/new" style="${BUTTON_STYLE}">Créer une annonce</a>
       </div>
     `;
     return { subject: 'Annonce supprimée', html: wrap('Annonce supprimée', body) };
@@ -347,7 +349,7 @@ export const emailTemplates = {
       }</p>
       ${isApproved ? `
       <div style="text-align:center;margin:24px 0;">
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/seller/listings/new" style="${BUTTON_STYLE}">Publier une annonce</a>
+        <a href="${APP_URL}/dashboard/seller/listings/new" style="${BUTTON_STYLE}">Publier une annonce</a>
       </div>` : ''}
     `;
     return { subject: isApproved ? 'Compte vendeur vérifié' : 'Demande vendeur rejetée', html: wrap(isApproved ? 'Vendeur vérifié' : 'Demande vendeur', body) };

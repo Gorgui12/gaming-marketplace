@@ -5,6 +5,9 @@ const envSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
 
+  // URL publique de l'app web, utilisée pour les liens des emails sortants
+  APP_URL: z.string().url().default('http://localhost:3000'),
+
   MONGODB_URI: z.string().min(1, 'MONGODB_URI est obligatoire'),
 
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET doit faire au moins 32 caractères'),

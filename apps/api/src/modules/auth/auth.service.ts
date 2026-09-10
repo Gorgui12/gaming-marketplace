@@ -94,7 +94,7 @@ export class AuthService {
   }
 
   static async forgotPassword(input: ForgotPasswordInput) {
-    const user = await UserModel.findOne({ email: input.email });
+    const user = await UserModel.findOne({ email: input.email }).select('+passwordHash');
     if (!user) {
       // Ne pas révéler si l'email existe ou non (sécurité)
       return;
@@ -112,7 +112,7 @@ export class AuthService {
     user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 heure
     await user.save();
 
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${token}`;
+    const resetUrl = `${env.APP_URL}/reset-password?token=${token}`;
 
     EmailService.sendPasswordReset(user.email, user.firstName, resetUrl).catch((err) => {
       logger.error({ err, email: user.email }, 'Échec envoi email reset password');
