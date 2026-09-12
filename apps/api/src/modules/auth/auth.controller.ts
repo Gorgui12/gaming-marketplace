@@ -5,6 +5,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   googleAuthSchema,
+  verifyEmailSchema,
 } from '@gm/validation';
 import { asyncHandler } from '../../lib/async-handler.js';
 import { AuthService } from './auth.service.js';
@@ -88,5 +89,18 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     data: { id: user._id, email: user.email, username: user.username },
+  });
+});
+
+export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
+  const input = verifyEmailSchema.parse(req.body);
+  const user = await AuthService.verifyEmail(input);
+  res.status(200).json({
+    success: true,
+    data: {
+      email: user.email,
+      emailVerified: user.emailVerified,
+      message: 'Votre email a été confirmé. Merci !',
+    },
   });
 });

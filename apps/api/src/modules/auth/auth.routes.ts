@@ -9,6 +9,7 @@ import {
   forgotPassword,
   resetPassword,
   googleAuth,
+  verifyEmail,
 } from './auth.controller.js';
 
 export const authRouter = Router();
@@ -20,3 +21,4 @@ authRouter.get('/me', requireAuth, me);
 authRouter.post('/forgot-password', authRateLimiter, forgotPassword);
 authRouter.post('/reset-password', authRateLimiter, resetPassword);
 authRouter.post('/google', authRateLimiter, googleAuth);
+authRouter.post('/verify-email', authRateLimiter, verifyEmail);

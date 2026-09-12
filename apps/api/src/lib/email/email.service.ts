@@ -135,6 +135,11 @@ export class EmailService {
     await this.send(to, subject, html);
   }
 
+  static async sendEmailVerification(to: string, firstName: string, verifyUrl: string) {
+    const { subject, html } = emailTemplates.emailVerification(firstName, verifyUrl);
+    await this.send(to, subject, html);
+  }
+
   static async sendTransactionCreated(params: {
     to: string;
     firstName: string;

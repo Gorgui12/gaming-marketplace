@@ -106,6 +106,23 @@ export const emailTemplates = {
     return { subject: 'Réinitialisation de votre mot de passe', html: wrap('Mot de passe oublié', body) };
   },
 
+  emailVerification(firstName: string, verifyUrl: string) {
+    const body = `
+      <p style="margin:0 0 16px;">Bonjour <strong>${escapeHtml(firstName)}</strong>,</p>
+      <p style="margin:0 0 16px;">Merci de vous être inscrit sur Gaming Marketplace ! Cliquez sur le bouton ci-dessous pour confirmer votre adresse email :</p>
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${verifyUrl}" style="${BUTTON_STYLE}">Confirmer mon email</a>
+      </div>
+      <p style="margin:0 0 16px;color:#94a3b8;font-size:13px;">Ce lien expire dans 24 heures.</p>
+      <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;border:1px solid #d4af37;">
+        <p style="margin:0 0 8px;color:#d4af37;font-size:13px;font-weight:700;">Vous ne trouvez pas cet email ?</p>
+        <p style="margin:0;color:#e2e8f0;font-size:13px;">Pensez à vérifier votre dossier <strong>courrier indésirable / spam</strong> (et vos onglets <strong>Promotions</strong> ou <strong>Mises à jour</strong> sur Gmail). Sur iPhone/iOS et iCloud, ce type d'email arrive encore régulièrement en spam. N'oubliez pas de marquer notre email comme "non indésirable" s'il y apparaît.</p>
+      </div>
+      <p style="margin:0;color:#94a3b8;font-size:13px;">Une question ? Contactez-nous à support@gamingmarket.store</p>
+    `;
+    return { subject: 'Confirmez votre email', html: wrap('Confirmation d\'email', body) };
+  },
+
   transactionCreated(params: {
     firstName: string;
     role: 'buyer' | 'seller';

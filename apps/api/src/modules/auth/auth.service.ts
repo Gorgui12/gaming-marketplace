@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import argon2 from 'argon2';
 import { OAuth2Client } from 'google-auth-library';
 import { UserRole } from '@gm/types';
-import type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput, GoogleAuthInput } from '@gm/validation';
+import type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput, GoogleAuthInput, VerifyEmailInput } from '@gm/validation';
 import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { UserModel } from '../users/user.model.js';
@@ -58,8 +58,18 @@ export class AuthService {
       await AffiliateAttributionService.attachSessionToUser(input.sessionId, String(user._id));
     }
 
-    // Envoi email de bienvenue (async, sans attendre)
-    EmailService.sendWelcome(user.email, user.firstName).catch(() => {});
+    // Envoi email de confirmation d'email (async, sans attendre). Le token
+    // est stocké hashé ; seuls le lien et son hash transitent/stockés.
+    const token = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    user.emailVerifyToken = hashedToken;
+    user.emailVerifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 heures
+    await user.save();
+
+    const verifyUrl = `${env.APP_URL}/verify-email?token=${token}`;
+    EmailService.sendEmailVerification(user.email, user.firstName, verifyUrl).catch((err) => {
+      logger.error({ err, email: user.email }, 'Échec envoi email de confirmation');
+    });
 
     return user;
   }
@@ -139,6 +149,44 @@ export class AuthService {
     await AuditService.log({
       actor: String(user._id),
       action: 'user.password_reset',
+      entityType: 'User',
+      entityId: String(user._id),
+    });
+
+    return user;
+  }
+
+  static async verifyEmail(input: VerifyEmailInput) {
+    const hashedToken = crypto.createHash('sha256').update(input.token).digest('hex');
+
+    const user = await UserModel.findOne({
+      emailVerifyToken: hashedToken,
+      emailVerifyExpires: { $gt: new Date() },
+    }).select('+emailVerifyToken +emailVerifyExpires');
+
+    if (!user) {
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        "Lien de confirmation invalide ou expiré. Veuillez demander un nouvel email de confirmation.",
+        400,
+      );
+    }
+
+    if (user.emailVerified) {
+      user.emailVerifyToken = undefined;
+      user.emailVerifyExpires = undefined;
+      await user.save();
+      return user;
+    }
+
+    user.emailVerified = true;
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+    await user.save();
+
+    await AuditService.log({
+      actor: String(user._id),
+      action: 'user.email_verified',
       entityType: 'User',
       entityId: String(user._id),
     });

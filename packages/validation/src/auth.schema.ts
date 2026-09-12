@@ -49,3 +49,8 @@ export const googleAuthSchema = z.object({
   sessionId: z.string().optional(),
 });
 export type GoogleAuthInput = z.infer<typeof googleAuthSchema>;
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1, 'Token manquant'),
+});
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;

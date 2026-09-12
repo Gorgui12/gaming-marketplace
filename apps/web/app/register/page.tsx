@@ -115,7 +115,7 @@ export default function RegisterPage() {
         json: parsed.data,
       });
       notifyAuthChanged();
-      router.push('/marketplace');
+      router.push('/verify-email');
       router.refresh();
     } catch (err) {
       setErrors({
