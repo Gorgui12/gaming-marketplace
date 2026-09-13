@@ -1,13 +1,18 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { Suspense } from 'react';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
-import { apiFetch } from '@/lib/api-client';
-import type { Listing, Paginated } from '@gm/types';
-import Link from 'next/link';
 import { ListingCard } from '@/components/listing-card';
+import { ListingFilters } from '@/components/listing-filters';
+import { apiFetch } from '@/lib/api-client';
+import { buildListingsPath } from '@/lib/listings-query';
 import { breadcrumbJsonLd } from '@/lib/seo';
+import type { Listing, Paginated } from '@gm/types';
 
 export const revalidate = 60;
+
+type MarketplaceSearchParams = Record<string, string | undefined>;
 
 export const metadata: Metadata = {
   title: 'Comptes eFootball à vendre au Sénégal | Dakar, Thiès, tout le pays',
@@ -16,16 +21,28 @@ export const metadata: Metadata = {
   alternates: { canonical: '/marketplace/efootball' },
 };
 
-async function getEfootballListings(): Promise<Paginated<Listing> | null> {
+async function getEfootballListings(
+  params: MarketplaceSearchParams,
+): Promise<Paginated<Listing> | null> {
   try {
-    return await apiFetch<Paginated<Listing>>('/api/v1/listings?game=efootball');
+    return await apiFetch<Paginated<Listing>>(
+      buildListingsPath('/api/v1/listings', { ...params, game: 'efootball' }),
+    );
   } catch {
     return null;
   }
 }
 
-export default async function EfootballMarketplacePage() {
-  const result = await getEfootballListings();
+export default async function EfootballMarketplacePage({
+  searchParams,
+}: {
+  searchParams: Promise<MarketplaceSearchParams>;
+}) {
+  const params = await searchParams;
+  const result = await getEfootballListings(params);
+  const hasFilters = Boolean(
+    (params.sort && params.sort !== 'recent') || params.minPrice || params.maxPrice,
+  );
 
   return (
     <>
@@ -62,17 +79,32 @@ export default async function EfootballMarketplacePage() {
 
         {!result || result.items.length === 0 ? (
           <div className="mt-10 rounded-ticket border border-white/10 bg-navy-mid p-10 text-center">
-            <p className="font-display text-lg text-bone">Aucun compte disponible pour l&apos;instant</p>
+            <p className="font-display text-lg text-bone">
+              {hasFilters
+                ? 'Aucune annonce ne correspond à vos filtres'
+                : 'Aucun compte disponible pour l’instant'}
+            </p>
             <p className="mt-2 text-sm text-bone/60">
-              Revenez bientôt — de nouvelles annonces sont publiées régulièrement.
+              {hasFilters
+                ? 'Essayez d’élargir vos critères de recherche.'
+                : 'Revenez bientôt — de nouvelles annonces sont publiées régulièrement.'}
             </p>
           </div>
         ) : (
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {result.items.map((listing) => (
-              <ListingCard key={listing._id} listing={listing} />
-            ))}
-          </div>
+          <>
+            <Suspense
+              fallback={
+                <div className="mt-8 h-16 animate-pulse rounded-ticket border border-white/10 bg-navy-mid" />
+              }
+            >
+              <ListingFilters />
+            </Suspense>
+            <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {result.items.map((listing) => (
+                <ListingCard key={listing._id} listing={listing} />
+              ))}
+            </div>
+          </>
         )}
       </main>
       <SiteFooter />

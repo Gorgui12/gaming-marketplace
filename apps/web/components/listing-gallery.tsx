@@ -51,7 +51,7 @@ export function ListingGallery({ images, title }: { images: string[]; title: str
           fill
           priority
           sizes="(min-width: 1024px) 640px, 100vw"
-          className="object-cover"
+          className="object-contain"
         />
         {images.length > 1 ? (
           <>

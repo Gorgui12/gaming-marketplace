@@ -18,7 +18,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
             alt={listing.title}
             fill
             sizes="(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw"
-            className="object-cover transition duration-300 group-hover:scale-[1.04]"
+            className="object-contain transition duration-300 group-hover:scale-[1.04]"
           />
         ) : (
           <div className="flex h-full items-center justify-center font-mono text-xs text-bone/30">
