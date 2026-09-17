@@ -222,6 +222,8 @@ export const emailTemplates = {
     role: 'buyer' | 'seller';
     transactionId: string;
     listingTitle: string;
+    amount?: number;
+    platformFee?: number;
     sellerAmount?: number;
     currency?: string;
   }) {
@@ -229,12 +231,32 @@ export const emailTemplates = {
     const firstName = escapeHtml(params.firstName);
     const listingTitle = escapeHtml(params.listingTitle);
     const currency = params.currency ? escapeHtml(params.currency) : '';
+    const sellerBreakdown =
+      !isBuyer && params.amount != null && params.platformFee != null && params.sellerAmount != null
+        ? `
+      <div style="background:#1e293b;padding:16px;border-radius:8px;margin:16px 0;">
+        <p style="margin:0 0 8px;color:#d4af37;font-size:13px;font-weight:700;text-transform:uppercase;">Détail du paiement</p>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0;">
+          <span style="color:#94a3b8;font-size:13px;">Prix de vente</span>
+          <span style="color:#e2e8f0;font-size:13px;font-weight:600;">${params.amount.toLocaleString('fr-FR')} ${currency}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0;">
+          <span style="color:#94a3b8;font-size:13px;">Commission plateforme</span>
+          <span style="color:#f87171;font-size:13px;font-weight:600;">&minus;${params.platformFee.toLocaleString('fr-FR')} ${currency}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 0;border-top:1px solid #334155;padding-top:8px;">
+          <span style="color:#e2e8f0;font-size:13px;font-weight:700;">Vous recevez</span>
+          <span style="color:#4ade80;font-size:15px;font-weight:700;">${params.sellerAmount.toLocaleString('fr-FR')} ${currency}</span>
+        </div>
+      </div>`
+        : '';
     const body = `
       <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
       <p style="margin:0 0 16px;">${isBuyer
         ? `La transaction pour <strong>${listingTitle}</strong> est terminée. Merci pour votre achat !`
-        : `La transaction pour <strong>${listingTitle}</strong> est terminée. ${params.sellerAmount ? `Vous recevrez <strong>${params.sellerAmount.toLocaleString('fr-FR')} ${currency}</strong> prochainement.` : ''}`
+        : `La transaction pour <strong>${listingTitle}</strong> est terminée. Voici le détail de votre paiement :`
       }</p>
+      ${sellerBreakdown}
       <p style="margin:0;color:#94a3b8;font-size:13px;">Référence : ${escapeHtml(params.transactionId)}</p>
       <div style="text-align:center;margin:24px 0;">
         <a href="${isBuyer ? BUYER_DASHBOARD_URL : SELLER_DASHBOARD_URL}" style="${BUTTON_STYLE}">${isBuyer ? 'Voir mon historique' : 'Voir ma vente'}</a>

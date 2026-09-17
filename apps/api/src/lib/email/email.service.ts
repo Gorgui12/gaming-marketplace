@@ -191,6 +191,8 @@ export class EmailService {
     role: 'buyer' | 'seller';
     transactionId: string;
     listingTitle: string;
+    amount?: number;
+    platformFee?: number;
     sellerAmount?: number;
     currency?: string;
   }) {

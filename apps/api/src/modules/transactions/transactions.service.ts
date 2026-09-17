@@ -309,7 +309,8 @@ export class TransactionsService {
       if (seller) {
         EmailService.sendTransactionCompleted({
           to: seller.email, firstName: seller.firstName, role: 'seller',
-          ...emailData, sellerAmount: transaction.sellerAmount, currency: transaction.currency,
+          ...emailData, amount: transaction.amount, platformFee: transaction.platformFee,
+          sellerAmount: transaction.sellerAmount, currency: transaction.currency,
         }).catch(() => {});
       }
       NotificationService.create({
@@ -487,6 +488,7 @@ export class TransactionsService {
           to: seller.email, firstName: seller.firstName, role: 'seller',
           transactionId: String(transaction._id),
           listingTitle: listing?.title ?? 'Annonce',
+          amount: transaction.amount, platformFee: transaction.platformFee,
           sellerAmount: transaction.sellerAmount, currency: transaction.currency,
         }).catch(() => {});
       }

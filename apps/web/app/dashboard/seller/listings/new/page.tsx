@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createListingSchema } from '@gm/validation';
+import { computeFee, DEFAULT_FEE_RULE } from '@gm/config';
+import { splitAmount } from '@gm/utils';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { ImageUploader } from '@/components/image-uploader';
@@ -65,6 +67,17 @@ export default function NewListingPage() {
   }
 
   const selectedGame = games?.find((g) => g._id === form.game);
+
+  // Aperçu transparent de la commission plateforme : même calcul que le
+  // serveur (computeFee + plafonnement au prix, voir TransactionsService),
+  // affiché avant publication pour que le vendeur connaisse son revenu net.
+  const feePreview = (() => {
+    const price = Number(form.price);
+    if (!form.price || !Number.isFinite(price) || price <= 0) return null;
+    const platformFee = Math.min(computeFee(price, DEFAULT_FEE_RULE), price);
+    const net = splitAmount(price, platformFee).sellerAmount;
+    return { platformFee, net };
+  })();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -224,6 +237,24 @@ export default function NewListingPage() {
                   <p className="mt-1 text-xs text-coral">
                     {fieldError('price') ?? fieldError('currency')}
                   </p>
+                )}
+                {feePreview && (
+                  <div className="mt-2 rounded-lg border border-white/10 bg-navy-mid p-3 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-bone/60">
+                        Commission plateforme ({(DEFAULT_FEE_RULE.transactionFeePercentage * 100).toFixed(0)}%, min {DEFAULT_FEE_RULE.minimumFee.toLocaleString('fr-FR')} FCFA)
+                      </span>
+                      <span className="font-mono text-coral">
+                        −{feePreview.platformFee.toLocaleString('fr-FR')} FCFA
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-white/10 pt-1.5">
+                      <span className="text-mint">Vous recevrez</span>
+                      <span className="font-mono font-semibold text-mint">
+                        {feePreview.net.toLocaleString('fr-FR')} FCFA
+                      </span>
+                    </div>
+                  </div>
                 )}
               </div>
               <select

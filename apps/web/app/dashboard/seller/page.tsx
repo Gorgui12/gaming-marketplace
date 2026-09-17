@@ -24,6 +24,8 @@ interface MySale {
   amount: number;
   currency: string;
   escrowStatus: string;
+  platformFee?: number;
+  sellerAmount?: number;
 }
 
 const LISTING_STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -162,6 +164,29 @@ export default function SellerDashboardPage() {
                     {SALE_STATUS_LABEL[s.escrowStatus] ?? s.escrowStatus}
                   </span>
                 </div>
+
+                {s.platformFee != null && s.sellerAmount != null && (
+                  <div className="mt-3 space-y-1 rounded-lg border border-white/10 bg-navy-deep p-3 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-bone/60">Prix de vente</span>
+                      <span className="font-mono text-bone">
+                        {s.amount.toLocaleString('fr-FR')} {s.currency}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-bone/60">Commission plateforme</span>
+                      <span className="font-mono text-coral">
+                        −{s.platformFee.toLocaleString('fr-FR')} {s.currency}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-1.5">
+                      <span className="text-mint">Net reçu</span>
+                      <span className="font-mono font-semibold text-mint">
+                        {s.sellerAmount.toLocaleString('fr-FR')} {s.currency}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {s.escrowStatus === 'ESCROW_ACTIVE' && (
                   deliveringId === s._id ? (
