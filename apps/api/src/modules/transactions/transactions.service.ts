@@ -1,4 +1,11 @@
-import { TransactionState, ListingStatus, AccessStatus, AttributionType, NotificationType } from '@gm/types';
+import {
+  TransactionState,
+  ListingStatus,
+  AccessStatus,
+  AttributionType,
+  NotificationType,
+  PaymentStatus,
+} from '@gm/types';
 import { generatePaymentReference } from '@gm/utils';
 import { computeFee, DEFAULT_FEE_RULE } from '@gm/config';
 import { splitAmount } from '@gm/utils';
@@ -490,6 +497,75 @@ export class TransactionsService {
           listingTitle: listing?.title ?? 'Annonce',
           amount: transaction.amount, platformFee: transaction.platformFee,
           sellerAmount: transaction.sellerAmount, currency: transaction.currency,
+        }).catch(() => {});
+      }
+    }
+
+    return transaction;
+  }
+
+  /**
+   * Action admin: transaction bloquée en PAYMENT_PENDING (IPN
+   * échec/expiration jamais reçu, vérification active renvoyant FAILED sans
+   * jamais conclure — cf. applyPaymentConfirmation). Elle n'aboutira pas:
+   * on annule la commande et on libère l'annonce (RESERVED -> PUBLISHED)
+   * pour qu'elle redevienne visible du marketplace. Le paiement n'ayant pas
+   * abouti, aucun remboursement ne s'impose — c'est une libération, pas un
+   * refund.
+   */
+  static async adminCancelPendingPayment(input: {
+    transactionId: string;
+    adminId: string;
+    reason: string;
+  }) {
+    const transaction = await TransactionModel.findById(input.transactionId);
+    if (!transaction) {
+      throw AppError.notFound(ErrorCode.TRANSACTION_NOT_FOUND, 'Transaction introuvable');
+    }
+
+    assertTransition(
+      transaction.escrowStatus as TransactionState,
+      TransactionState.CANCELLED,
+      'ADMIN',
+    );
+
+    transaction.stateHistory.push({
+      from: transaction.escrowStatus,
+      to: TransactionState.CANCELLED,
+      at: new Date(),
+      actor: input.adminId,
+    });
+    transaction.escrowStatus = TransactionState.CANCELLED;
+    transaction.paymentStatus = PaymentStatus.FAILED;
+    await transaction.save();
+
+    // Même garde-fou qu'au rollback d'initiation: on ne libère que si
+    // l'annonce est encore RESERVED par cette commande (cas rare de
+    // concurrence, sinon on la laisse tranquille).
+    await ListingModel.updateOne(
+      { _id: transaction.listing, status: ListingStatus.RESERVED },
+      { $set: { status: ListingStatus.PUBLISHED } },
+    );
+
+    await AuditService.log({
+      actor: input.adminId,
+      action: 'transaction.cancelled_payment_pending',
+      entityType: 'Transaction',
+      entityId: String(transaction._id),
+      metadata: { reason: input.reason },
+    });
+
+    // Notification email acheteur — mêmes templates que l'annulation
+    // automatique d'un paiement en échec.
+    {
+      const listing = await ListingModel.findById(transaction.listing).select('title');
+      const buyer = await UserModel.findById(transaction.buyer).select('email firstName');
+      if (buyer) {
+        EmailService.sendTransactionPaymentFailed({
+          to: buyer.email,
+          firstName: buyer.firstName,
+          transactionId: String(transaction._id),
+          listingTitle: listing?.title ?? 'Annonce',
         }).catch(() => {});
       }
     }

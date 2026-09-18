@@ -64,8 +64,6 @@ function listingTitle(l: PopulatedListing | string | undefined): string {
   return l.title;
 }
 
-const LEGAL_ADMIN_ACTIONS = new Set(['DISPUTED']);
-
 export default function AdminTransactionsPage() {
   const [data, setData] = useState<{
     transactions: AdminTransaction[];
@@ -179,7 +177,7 @@ function TransactionRow({
   setError: (msg: string) => void;
   reload: () => Promise<void>;
 }) {
-  const [action, setAction] = useState<'REFUND' | 'RELEASE' | null>(null);
+  const [action, setAction] = useState<'REFUND' | 'RELEASE' | 'CANCEL' | null>(null);
   const [reason, setReason] = useState('');
 
   async function submit(endpoint: string, fallbackReason: string) {
@@ -200,7 +198,100 @@ function TransactionRow({
     }
   }
 
-  const canAct = LEGAL_ADMIN_ACTIONS.has(tx.escrowStatus);
+  const canRefundRelease = tx.escrowStatus === 'DISPUTED';
+  const canCancelPending = tx.escrowStatus === 'PAYMENT_PENDING';
+
+  if (action && (canRefundRelease || canCancelPending)) {
+    const endpoint =
+      action === 'REFUND'
+        ? `/api/v1/transactions/${tx._id}/admin-refund`
+        : action === 'RELEASE'
+          ? `/api/v1/transactions/${tx._id}/admin-release`
+          : `/api/v1/transactions/${tx._id}/admin-cancel`;
+    const fallbackReason =
+      action === 'REFUND'
+        ? `Remboursement admin depuis le dashboard (${tx.paymentReference})`
+        : action === 'RELEASE'
+          ? `Libération vendeur depuis le dashboard (${tx.paymentReference})`
+          : `Paiement en attente annulé par un admin (${tx.paymentReference})`;
+
+    return (
+      <tr key={tx._id} className="border-t border-white/5 align-top">
+        <td className="px-4 py-3">
+          <p className="font-mono text-xs text-bone">{tx.paymentReference}</p>
+          <p className="text-xs text-bone/40">
+            {new Date(tx.createdAt).toLocaleDateString('fr-FR')}
+          </p>
+        </td>
+        <td className="max-w-[220px] truncate px-4 py-3 text-bone/80">
+          {listingTitle(tx.listing)}
+        </td>
+        <td className="px-4 py-3 font-mono text-xs">
+          <p className="text-bone/70">A: {label(tx.buyer)}</p>
+          <p className="text-bone/50">V: {label(tx.seller)}</p>
+        </td>
+        <td className="px-4 py-3 font-mono text-gold">
+          {fmt.format(tx.amount)} {tx.currency}
+          {tx.discountAmount > 0 && (
+            <p className="text-xs text-mint">
+              promo {tx.appliedPromoCode} (-{fmt.format(tx.discountAmount)})
+            </p>
+          )}
+        </td>
+        <td className="px-4 py-3 font-mono text-xs text-bone/60">
+          frais {fmt.format(tx.platformFee)}
+          <br />
+          vendeur {fmt.format(tx.sellerAmount)}
+        </td>
+        <td className="px-4 py-3 space-y-1.5">
+          <StatusBadge status={tx.escrowStatus} />
+          <br />
+          <span className="font-mono text-[10px] text-bone/40">{tx.paymentStatus}</span>
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex w-56 flex-col gap-2">
+            <input
+              autoFocus
+              placeholder={
+                action === 'REFUND'
+                  ? 'Motif du remboursement'
+                  : action === 'RELEASE'
+                    ? 'Motif de la libération'
+                    : "Motif de l'annulation"
+              }
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-navy-deep px-2.5 py-1.5 text-xs text-bone outline-none focus:border-gold"
+            />
+            <div className="flex gap-2">
+              <button
+                disabled={busy}
+                onClick={() => submit(endpoint, fallbackReason)}
+                className={`rounded-full px-3 py-1 text-xs hover:opacity-80 disabled:opacity-50 ${
+                  action === 'REFUND'
+                    ? 'bg-coral/15 text-coral hover:bg-coral/25'
+                    : action === 'RELEASE'
+                      ? 'bg-mint/15 text-mint hover:bg-mint/25'
+                      : 'bg-gold/15 text-gold hover:bg-gold/25'
+                }`}
+              >
+                Confirmer
+              </button>
+              <button
+                onClick={() => {
+                  setAction(null);
+                  setReason('');
+                }}
+                className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/60 hover:border-white/30"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr key={tx._id} className="border-t border-white/5 align-top">
@@ -236,66 +327,37 @@ function TransactionRow({
         <span className="font-mono text-[10px] text-bone/40">{tx.paymentStatus}</span>
       </td>
       <td className="px-4 py-3">
-        {canAct &&
-          (action ? (
-            <div className="flex w-56 flex-col gap-2">
-              <input
-                autoFocus
-                placeholder={action === 'REFUND' ? 'Motif du remboursement' : 'Motif de la libération'}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-navy-deep px-2.5 py-1.5 text-xs text-bone outline-none focus:border-gold"
-              />
-              <div className="flex gap-2">
+        {!action && (canRefundRelease || canCancelPending) && (
+          <div className="flex flex-col gap-2">
+            {canCancelPending && (
+              <button
+                disabled={busy}
+                onClick={() => setAction('CANCEL')}
+                className="rounded-full bg-gold/15 px-3 py-1 text-xs text-gold hover:bg-gold/25 disabled:opacity-50"
+              >
+                Annuler &amp; libérer l&apos;annonce
+              </button>
+            )}
+            {canRefundRelease && (
+              <>
                 <button
                   disabled={busy}
-                  onClick={() =>
-                    submit(
-                      action === 'REFUND'
-                        ? `/api/v1/transactions/${tx._id}/admin-refund`
-                        : `/api/v1/transactions/${tx._id}/admin-release`,
-                      action === 'REFUND'
-                        ? `Remboursement admin depuis le dashboard (${tx.paymentReference})`
-                        : `Libération vendeur depuis le dashboard (${tx.paymentReference})`,
-                    )
-                  }
-                  className={`rounded-full px-3 py-1 text-xs hover:opacity-80 disabled:opacity-50 ${
-                    action === 'REFUND'
-                      ? 'bg-coral/15 text-coral hover:bg-coral/25'
-                      : 'bg-mint/15 text-mint hover:bg-mint/25'
-                  }`}
+                  onClick={() => setAction('REFUND')}
+                  className="rounded-full bg-coral/15 px-3 py-1 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
                 >
-                  Confirmer
+                  Rembourser l&apos;acheteur
                 </button>
                 <button
-                  onClick={() => {
-                    setAction(null);
-                    setReason('');
-                  }}
-                  className="rounded-full border border-white/15 px-3 py-1 text-xs text-bone/60 hover:border-white/30"
+                  disabled={busy}
+                  onClick={() => setAction('RELEASE')}
+                  className="rounded-full bg-mint/15 px-3 py-1 text-xs text-mint hover:bg-mint/25 disabled:opacity-50"
                 >
-                  Annuler
+                  Payer le vendeur
                 </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <button
-                disabled={busy}
-                onClick={() => setAction('REFUND')}
-                className="rounded-full bg-coral/15 px-3 py-1 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
-              >
-                Rembourser l&apos;acheteur
-              </button>
-              <button
-                disabled={busy}
-                onClick={() => setAction('RELEASE')}
-                className="rounded-full bg-mint/15 px-3 py-1 text-xs text-mint hover:bg-mint/25 disabled:opacity-50"
-              >
-                Payer le vendeur
-              </button>
-            </div>
-          ))}
+              </>
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );

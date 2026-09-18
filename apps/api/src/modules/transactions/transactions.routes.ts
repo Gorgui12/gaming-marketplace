@@ -3,6 +3,7 @@ import { requireAuth } from '../../middlewares/auth.middleware.js';
 import { requireRole } from '../../middlewares/rbac.middleware.js';
 import { UserRole } from '@gm/types';
 import {
+  adminCancelTransaction,
   adminRefundTransaction,
   adminReleaseTransaction,
   confirmTransaction,
@@ -33,4 +34,9 @@ transactionsRouter.post(
   '/:id/admin-release',
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   adminReleaseTransaction,
+);
+transactionsRouter.post(
+  '/:id/admin-cancel',
+  requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  adminCancelTransaction,
 );

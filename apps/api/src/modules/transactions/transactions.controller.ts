@@ -106,6 +106,15 @@ export const adminReleaseTransaction = asyncHandler(async (req: Request, res: Re
   });
   res.status(200).json({ success: true, data: { transaction } });
 });
+export const adminCancelTransaction = asyncHandler(async (req: Request, res: Response) => {
+  const transaction = await TransactionsService.adminCancelPendingPayment({
+    transactionId: req.params.id!,
+    adminId: req.user!.id,
+    reason: String(req.body?.reason ?? 'Non précisé'),
+  });
+  res.status(200).json({ success: true, data: { transaction } });
+});
+
 export const listMyTransactions = asyncHandler(async (req: Request, res: Response) => {
   const transactions = await TransactionsService.listMine(req.user!.id);
   res.status(200).json({ success: true, data: { transactions } });

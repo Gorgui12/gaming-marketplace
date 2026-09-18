@@ -238,6 +238,14 @@ export function createFakeModel<T extends Record<string, unknown>>() {
       return { modifiedCount: items.length };
     },
 
+    async updateOne(filter: Record<string, unknown>, update: Record<string, unknown>) {
+      const doc = [...store.values()].find((d) => matchesFilter(d, filter));
+      if (!doc) return { modifiedCount: 0 };
+      applyUpdate(doc, update);
+      store.set(doc._id, doc);
+      return { modifiedCount: 1 };
+    },
+
     // Simule une contrainte d'unicité applicative pour les tests
     // d'idempotence webhook (voir payment-event.model.ts: index unique sur
     // providerEventId). L'appelant du test déclenche ceci explicitement.

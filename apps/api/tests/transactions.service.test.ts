@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ListingStatus, TransactionState } from '@gm/types';
+import { ListingStatus, TransactionState, PaymentStatus } from '@gm/types';
 import { createFakeModel } from './helpers/fake-model.js';
 
 const fakeListingModel = createFakeModel();
@@ -43,7 +43,12 @@ vi.mock('../src/lib/email/email.service.js', () => ({
     sendTransactionDelivered: vi.fn().mockResolvedValue(undefined),
     sendTransactionCompleted: vi.fn().mockResolvedValue(undefined),
     sendTransactionRefunded: vi.fn().mockResolvedValue(undefined),
+    sendTransactionPaymentFailed: vi.fn().mockResolvedValue(undefined),
   },
+}));
+
+vi.mock('../src/modules/notifications/notification.service.js', () => ({
+  NotificationService: { create: vi.fn().mockResolvedValue(undefined) },
 }));
 
 const { TransactionsService } = await import(
@@ -174,6 +179,88 @@ describe('TransactionsService.deliver / confirm — participant authorization', 
 
     await expect(
       TransactionsService.confirm({ transactionId: txn._id, buyerId: 'complete-stranger' }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('TransactionsService.adminCancelPendingPayment', () => {
+  beforeEach(() => {
+    fakeListingModel.__reset();
+    fakeGameModel.__reset();
+    fakeTransactionModel.__reset();
+    vi.clearAllMocks();
+  });
+
+  it("annule une transaction PAYMENT_PENDING et libère l'annonce (PUBLISHED)", async () => {
+    const listing = await fakeListingModel.create({
+      seller: 'seller-1',
+      game: 'game-1',
+      price: 30_000,
+      currency: 'XOF',
+      status: ListingStatus.RESERVED,
+    });
+    const txn = await fakeTransactionModel.create({
+      buyer: 'buyer-1',
+      seller: 'seller-1',
+      listing: listing._id,
+      escrowStatus: TransactionState.PAYMENT_PENDING,
+      stateHistory: [],
+    });
+
+    const result = await TransactionsService.adminCancelPendingPayment({
+      transactionId: txn._id,
+      adminId: 'admin-1',
+      reason: 'test manuel',
+    });
+
+    expect(result.escrowStatus).toBe(TransactionState.CANCELLED);
+    expect(result.paymentStatus).toBe(PaymentStatus.FAILED);
+
+    const updatedListing = await fakeListingModel.findById(listing._id);
+    expect(updatedListing!.status).toBe(ListingStatus.PUBLISHED);
+  });
+
+  it("n'efface pas une annonce qui a déjà été libérée (non-RESERVED)", async () => {
+    const listing = await fakeListingModel.create({
+      seller: 'seller-1',
+      game: 'game-1',
+      price: 30_000,
+      currency: 'XOF',
+      status: ListingStatus.SOLD,
+    });
+    const txn = await fakeTransactionModel.create({
+      buyer: 'buyer-1',
+      seller: 'seller-1',
+      listing: listing._id,
+      escrowStatus: TransactionState.PAYMENT_PENDING,
+      stateHistory: [],
+    });
+
+    await TransactionsService.adminCancelPendingPayment({
+      transactionId: txn._id,
+      adminId: 'admin-1',
+      reason: 'test',
+    });
+
+    const updatedListing = await fakeListingModel.findById(listing._id);
+    expect(updatedListing!.status).toBe(ListingStatus.SOLD);
+  });
+
+  it("refuse d'annuler une transaction hors PAYMENT_PENDING", async () => {
+    const txn = await fakeTransactionModel.create({
+      buyer: 'buyer-1',
+      seller: 'seller-1',
+      escrowStatus: TransactionState.ESCROW_ACTIVE,
+      listing: 'listing-1',
+      stateHistory: [],
+    });
+
+    await expect(
+      TransactionsService.adminCancelPendingPayment({
+        transactionId: txn._id,
+        adminId: 'admin-1',
+        reason: 'test',
+      }),
     ).rejects.toThrow();
   });
 });
