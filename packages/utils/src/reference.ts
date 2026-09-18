@@ -1,4 +1,14 @@
-import { randomBytes } from 'node:crypto';
+/**
+ * Génère `byteLength` octets aléatoires cryptographiquement sûr via Web
+ * Crypto (getRandomValues). Utilisé à la place de `node:crypto` pour qu'un
+ * bundle client (Next.js) qui importe @gm/utils ne bute pas sur le schéma
+ * `node:` — Web Crypto est dispo en navigateur ET en Node >= 20.
+ */
+function randomHex(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 /**
  * Génère une référence de paiement interne unique et lisible.
@@ -10,7 +20,7 @@ import { randomBytes } from 'node:crypto';
  */
 export function generatePaymentReference(): string {
   const timePart = Date.now().toString(36).toUpperCase();
-  const randomPart = randomBytes(3).toString('hex').toUpperCase();
+  const randomPart = randomHex(3).toUpperCase();
   return `GM-${timePart}-${randomPart}`;
 }
 
@@ -27,6 +37,6 @@ export function generateAffiliateCode(displayName: string): string {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
     .slice(0, 16);
-  const suffix = randomBytes(2).toString('hex').toUpperCase();
+  const suffix = randomHex(2).toUpperCase();
   return `${base || 'AFF'}${suffix}`;
 }
