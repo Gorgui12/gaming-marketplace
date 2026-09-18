@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { BASE_URL, GEO, SITE_NAME, organizationJsonLd, websiteJsonLd } from '@/lib/seo';
 import { WhatsAppPopup } from '@/components/whatsapp-popup';
+
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -65,6 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         {children}
         <WhatsAppPopup />
+        <Analytics />
       </body>
     </html>
   );

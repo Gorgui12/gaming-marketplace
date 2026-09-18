@@ -16,6 +16,7 @@
     "@gm/ui": "workspace:*",
     "@gm/utils": "workspace:*",
     "@gm/validation": "workspace:*",
+    "@vercel/analytics": "^2.0.1",
     "lucide-react": "^0.454.0",
     "next": "^15.0.3",
     "react": "^18.3.1",
