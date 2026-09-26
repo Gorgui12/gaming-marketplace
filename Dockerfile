@@ -76,7 +76,13 @@ RUN pnpm install --frozen-lockfile --prod --filter "@gm/api..."
 # ---------------------------------------------------------------------------
 FROM base AS runtime
 ENV NODE_ENV=production
-ENV PORT=8080
+# PORT n'est volontairement PAS figé ici. Les PaaS l'injectent dans
+# l'environnement du conteneur (Render : 10000 par défaut) et c'est cette valeur
+# que server.ts lit en priorité. Un `ENV PORT=...` dans l'image risquerait de la
+# figer et de désaccorder le port d'écoute du port réellement routé, ce qui rend
+# l'API injoignable sans la moindre erreur visible dans les logs.
+# Sans PORT injecté, server.ts retombe sur env.API_PORT (4000) : l'image reste
+# donc lançable seule en local.
 
 # Les produits compilés d'abord, puis les node_modules de production PAR-DESSUS.
 # L'ordre est essential : le COPY de /app/packages/ depuis le build embarquerait

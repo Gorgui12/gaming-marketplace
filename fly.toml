@@ -1,5 +1,17 @@
 # Configuration Fly.io de l'API du marketplace.
 #
+# ⚠ NON UTILISÉE. La cible de production est Render — voir docs/DEPLOIEMENT.md.
+# Ce fichier est conservé comme référence (sonde, région, découpage
+# env/secrets) et redeviendra valide si une carte bancaire passe un jour sur le
+# compte Fly : l'allowance gratuite de Fly exige une carte, sans elle le compte ne
+# peut ni déployer ni démarrer de machine.
+#
+# Rendu inutilisé pour Koyeb non plus : l'offre gratuite y a été fermée aux
+# nouveaux comptes après le rachat par Mistral AI.
+#
+# Render n'a pas non plus de configuration déclarative versionnable : tout se
+# règle dans le dashboard, à l'exception de ce que porte le `Dockerfile`.
+#
 # App déjà créée dans le compte Fly (gorguipresi@gmail.com) et jamais
 # déployée : on la réutilise plutôt que d'en créer une nouvelle.
 # Le nom d'app est GLOBAL sur toute la plateforme Fly.
