@@ -1,0 +1,99 @@
+# Configuration Fly.io de l'API du marketplace.
+#
+# App déjà créée dans le compte Fly (gorguipresi@gmail.com) et jamais
+# déployée : on la réutilise plutôt que d'en créer une nouvelle.
+# Le nom d'app est GLOBAL sur toute la plateforme Fly.
+app = "gaming-marketplace"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # PORT est redéfinie par Fly automatiquement : ne pas la figer ici, sinon la
+  # valeur ne correspond plus au port interne réellement routé.
+  PORT = "8080"
+  NODE_ENV = "production"
+
+  # --- Valeurs non secrètes ---
+  # Elles sont versionnées ici, contrairement aux secrets (voir plus bas).
+  API_PUBLIC_URL = "https://gaming-marketplace.fly.dev"
+  APP_URL = "https://gamingmarket.store"
+  SESSION_COOKIE_NAME = "gm_session"
+  SESSION_TTL_DAYS = "7"
+  PAYMENT_PROVIDER = "unitechpay"
+  UNITECHPAY_BASE_URL = "https://api.unitech.sn/api.php"
+  STORAGE_PROVIDER = "cloudinary"
+  CORS_ALLOWED_ORIGINS = "https://gamingmarket.store,https://admin.gamingmarket.store"
+  RATE_LIMIT_WINDOW_MS = "60000"
+  RATE_LIMIT_MAX = "100"
+  # Expéditeur des emails sortants. Doit être un domaine vérifié dans Resend.
+  RESEND_FROM = "Gaming Marketplace <noreply@gamingmarket.store>"
+  # ID client OAuth "Sign in with Google". Public par nature (présent dans le
+  # bundle du navigateur) : ce n'est pas un secret, mais il doit être identique
+  # à NEXT_PUBLIC_GOOGLE_CLIENT_ID côté web.
+  GOOGLE_CLIENT_ID = "931697051716-3h1m5velt5e7kev2n5srdpfonvuhc1ja.apps.googleusercontent.com"
+
+# ---------------------------------------------------------------------------
+# Secrets — réellement confidentiels, à poser via `fly secrets set` (JAMAIS
+# dans ce fichier). Tous sont déjà présents dans apps/api/.env :
+#   MONGODB_URI                        (identifiants MongoDB Atlas)
+#   SESSION_SECRET                     (>= 32 car.)
+#   ACCOUNT_CREDENTIALS_ENCRYPTION_KEY (>= 32 car.)
+#   RESEND_API_KEY
+#   UNITECHPAY_API_KEY
+#   STORAGE_API_KEY / STORAGE_API_SECRET / STORAGE_CLOUD_NAME   (Cloudinary)
+#
+# .env.example ne contient plus que des placeholders.
+# ---------------------------------------------------------------------------
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # "off" = ne jamais mettre en veille. Combiné à min_machines_running = 0,
+  # cela donne exactement UNE machine, toujours chaude (~5 $/mois) au lieu des
+  # DEUX que Fly lance pour la haute disponibilité quand min_machines_running
+  # vaut 1 (~10 $/mois). On garde quand même auto_start pour qu'un redémarrage
+  # de la plateforme relance la machine sans intervention.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  # 0 = pas de seconde machine de secours. Le prix de la haute disponibilité
+  # est qu'un déploiement est coupe de quelques secondes le temps du rolling.
+  min_machines_running = 0
+  # Une seule instance shared-cpu suffit largement au volume actuel. En cas de
+  # pic, Fly en lance une seconde automatiquement. Augmenter type = "shared-cpu-4x"
+  # et cpu_kind = "performance" si le CPU devient le goulot d'étranglement.
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 25
+    hard_limit = 50
+
+  # Sonde sur /health (déclarée avant le rate limiter dans app.ts, elle ne
+  # consomme donc aucun quota). grace_period généreux car le serveur n'écoute
+  # qu'APRÈS la connexion à MongoDB : un machine qui n'arrive pas à joindre
+  # Atlas est ainsi considéré comme réellement malsain.
+  [[http_service.checks]]
+    grace_period = "45s"
+    interval = "15s"
+    method = "GET"
+    timeout = "3s"
+    path = "/health"
+    protocol = "http"
+    tls_verify = false
+
+[[vm]]
+  size = "shared-cpu-1x"
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
+
+# Tampon d'échange : évite un OOM kill si un pic de trafic fait monter la
+# mémoire au-delà de memory_mb pendant quelques secondes.
+swap_size_mb = 512
+
+[deploy]
+  strategy = "rolling"
+  # Annule et restaure la version précédente si la sonde /health échoue.
+  auto_rollback = "yes"

@@ -1,0 +1,40 @@
+# Contexte de build Docker. Emplacements des logs : ignorés -> contexte plus
+# petit, cache plus efficace, aucune fuite de secret dans l'image.
+
+# --- Secrets : le point le plus important ---
+# apps/api/.env contient les identifiants MongoDB Atlas, les clés de paiement
+# et le secret de session. Il ne doit JAMAIS entrer dans le contexte de build,
+# sinon il finit dans une couche d'image (lisible par quiconque a le registre).
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- Dépendances : réinstallées par pnpm dans l'image ---
+**/node_modules
+**/.pnpm-store
+.pnpm-store/
+
+# --- Artefacts de build : reconstruits par tsc dans l'image ---
+**/dist
+**/build
+**/.next
+**/out
+**/*.tsbuildinfo
+coverage/
+
+# --- Git & OS ---
+.git
+.gitignore
+.gitattributes
+**/.DS_Store
+Thumbs.db
+**/.vscode
+**/.idea
+
+# --- Docs & divers ---
+docs/
+**/*.md
+README*
+*.log
+npm-debug.log*
+pnpm-debug.log*

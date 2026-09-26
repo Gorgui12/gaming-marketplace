@@ -32,6 +32,13 @@ import { adminBlogRouter } from './modules/blog/admin-blog.routes.js';
 export function createApp(): Express {
   const app = express();
 
+  // Derrière le proxy Fly, `req.ip` et `req.protocol` ne sont corrects que si
+  // Express fait confiance au proxy. Sans ça, TOUS les clients partagent
+  // l'IP du proxy et tombent dans un seul bucket de rate limit (ce que
+  // express-rate-limit v7 signale par ailleurs), et `req.secure` reste false
+  // malgré le TLS. `1` = exactement un saut de confiance, soit le proxy Fly.
+  app.set('trust proxy', 1);
+
   app.use(helmet());
   app.use(
     cors({
@@ -49,12 +56,17 @@ export function createApp(): Express {
   // req.body.data.invoice.token comme documenté par PayDunya.
   app.use(express.urlencoded({ extended: true, limit: '2mb' }));
   app.use(mongoSanitize());
-  app.use(globalRateLimiter);
-  app.use(attachUser);
 
+  // Sonde de santé de la plateforme (Fly) et des orchestrateurs : déclarée
+  // avant le rate limiter global pour que le trafic d'infrastructure ne
+  // consomme jamais le quota des utilisateurs, ni ne fasse échouer la sonde
+  // quand le quota est atteint.
   app.get('/health', (_req, res) => {
     res.status(200).json({ success: true, data: { status: 'ok' } });
   });
+
+  app.use(globalRateLimiter);
+  app.use(attachUser);
 
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/listings', listingsRouter);
