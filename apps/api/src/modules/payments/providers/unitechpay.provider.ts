@@ -235,6 +235,15 @@ export class UnitechPayProvider implements PaymentProvider {
     // inchangé) — on couple transaction_id + event pour que plusieurs
     // évènements d'une même transaction restent distincts.
     const transactionId = String(data.transaction_id);
+    // Le montant EST dans la chaîne signée (cf. ligne 208) : il est donc
+    // digne de confiance, contrairement au transaction_id qui ne l'est pas.
+    // On le remonte pour que handleWebhook refuse de solder une transaction si
+    // le montant encaissé ne correspond pas au montant attendu.
+    const rawAmount = data.amount;
+    const amount =
+      rawAmount === undefined || rawAmount === null || rawAmount === ''
+        ? undefined
+        : Number(rawAmount);
 
     return {
       providerEventId: `${transactionId}-${data.event}`,
@@ -243,6 +252,7 @@ export class UnitechPayProvider implements PaymentProvider {
       // par notre plateforme).
       reference: transactionId,
       status,
+      amount: amount !== undefined && Number.isFinite(amount) ? amount : undefined,
       rawPayload: rawBody,
     };
   }

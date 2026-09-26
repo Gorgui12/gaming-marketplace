@@ -9,6 +9,7 @@ import { logger } from './lib/logger.js';
 import { attachUser } from './middlewares/auth.middleware.js';
 import { globalRateLimiter } from './middlewares/rate-limit.middleware.js';
 import { errorHandlerMiddleware } from './middlewares/error-handler.middleware.js';
+import { csrfGuard } from './middlewares/csrf.middleware.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { listingsRouter } from './modules/listings/listings.routes.js';
 import { transactionsRouter } from './modules/transactions/transactions.routes.js';
@@ -69,6 +70,9 @@ export function createApp(): Express {
   });
 
   app.use(globalRateLimiter);
+  // Protection CSRF sur les méthodes à effet de bord, déclarée avant tous les
+  // routers : une route ajoutée plus tard reste couverte sans y penser.
+  app.use(csrfGuard);
   app.use(attachUser);
 
   app.use('/api/v1/auth', authRouter);

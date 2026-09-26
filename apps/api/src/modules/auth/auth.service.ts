@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import argon2 from 'argon2';
 import { OAuth2Client } from 'google-auth-library';
-import { UserRole } from '@gm/types';
+import { UserRole, UserAccountStatus } from '@gm/types';
 import type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput, GoogleAuthInput, VerifyEmailInput } from '@gm/validation';
 import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
@@ -91,6 +91,19 @@ export class AuthService {
     const valid = await argon2.verify(user.passwordHash, input.password);
     if (!valid) {
       throw new AppError(ErrorCode.INVALID_CREDENTIALS, 'Identifiants invalides', 401);
+    }
+
+    // Le mot de passe est correct, mais le compte est suspendu/banni : on ne
+    // délivre pas de session. Sans ce contrôle, un bannissement était
+    // contournable en une simple requête de login.
+    if (user.status !== UserAccountStatus.ACTIVE) {
+      throw new AppError(
+        ErrorCode.FORBIDDEN,
+        user.status === UserAccountStatus.BANNED
+          ? 'Ce compte a été banni. Contactez le support.'
+          : 'Ce compte est suspendu. Contactez le support.',
+        403,
+      );
     }
 
     await AuditService.log({
@@ -245,6 +258,19 @@ export class AuthService {
         user.googleId = googleId;
         if (avatar && !user.avatar) user.avatar = avatar;
         await user.save();
+      }
+
+      // Même règle que pour le login par mot de passe : un compte suspendu ou
+      // banni ne doit pas pouvoir se réauthentifier via Google, sinon le
+      // bannishment est contournable en changeant de méthode de connexion.
+      if (user.status !== UserAccountStatus.ACTIVE) {
+        throw new AppError(
+          ErrorCode.FORBIDDEN,
+          user.status === UserAccountStatus.BANNED
+            ? 'Ce compte a été banni. Contactez le support.'
+            : 'Ce compte est suspendu. Contactez le support.',
+          403,
+        );
       }
 
       await AuditService.log({

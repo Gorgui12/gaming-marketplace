@@ -42,6 +42,13 @@ const userSchema = new Schema(
       enum: Object.values(UserAccountStatus),
       default: UserAccountStatus.ACTIVE,
     },
+    // Incrémenté à chaque changement de statut ou de rôle. Le token de
+    // session embarque la valeur lue à l'émission ; si elle ne correspond
+    // plus à celle en base, le cookie est considéré comme révoqué. C'est ce
+    // qui rend un bannissement ou une rétrogradation immédiatement effectif
+    // malgré un token stateless (sinon le cookie resterait valable
+    // SESSION_TTL_DAYS).
+    sessionVersion: { type: Number, default: 0 },
     referredByAffiliate: { type: Schema.Types.ObjectId, ref: 'Affiliate', default: null },
   },
   { timestamps: true },

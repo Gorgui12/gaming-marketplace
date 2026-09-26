@@ -149,8 +149,7 @@ describe('PaymentService.handleWebhook — idempotence', () => {
     expect(listing!.status).toBe(ListingStatus.PUBLISHED); // libérée
   });
 
-  it('silently ignores a webhook referencing an unknown transaction (no crash, no state change)', async () => {
-    parseWebhookMock.mockResolvedValue({
+  it('silently ignores a webhook referencing an unknown transaction (no crash, no state change)', async () => {    parseWebhookMock.mockResolvedValue({
       providerEventId: 'evt-unknown',
       reference: 'GM-DOES-NOT-EXIST',
       status: 'CONFIRMED',
@@ -317,5 +316,95 @@ describe('PaymentService.syncPaymentStatus — vérification active (filet anti-
 
     const updated = await fakeTransactionModel.findById(txn._id);
     expect(updated!.escrowStatus).toBe(TransactionState.PAYMENT_PENDING);
+  });
+});
+
+/**
+ * P0-1 — le statut d'un webhook était appliqué tel quel, sans jamais comparer
+ * le montant encaissé au montant de la transaction. Un webhook valide portant
+ * un montant inférieur suffisait à solder une commande plus chère.
+ */
+describe('PaymentService.handleWebhook — cohérence du montant', () => {
+  beforeEach(() => {
+    fakeTransactionModel.__reset();
+    fakePaymentEventModel.__reset();
+    fakeListingModel.__reset();
+    fakeUserModel.__reset();
+    vi.clearAllMocks();
+    fakePaymentEventModel.create = makeIdempotentCreate();
+  });
+
+  it('refuse de solder quand le montant encaissé ne correspond pas', async () => {
+    const txn = await fakeTransactionModel.create({
+      paymentReference: 'GM-AMT-1',
+      amount: 50_000,
+      escrowStatus: TransactionState.PAYMENT_PENDING,
+      paymentStatus: PaymentStatus.PENDING,
+      stateHistory: [],
+    });
+
+    parseWebhookMock.mockResolvedValue({
+      providerEventId: 'evt-amount-mismatch',
+      reference: 'GM-AMT-1',
+      status: 'CONFIRMED',
+      amount: 100,
+      rawPayload: {},
+    });
+
+    await expect(PaymentService.handleWebhook({}, {})).rejects.toMatchObject({
+      statusCode: 400,
+    });
+
+    // Point essentiel : la state machine n'a pas bougé.
+    const updated = await fakeTransactionModel.findById(txn._id);
+    expect(updated!.escrowStatus).toBe(TransactionState.PAYMENT_PENDING);
+    expect(updated!.paymentStatus).toBe(PaymentStatus.PENDING);
+  });
+
+  it('accepte un webhook dont le montant correspond exactement', async () => {
+    const txn = await fakeTransactionModel.create({
+      paymentReference: 'GM-AMT-2',
+      amount: 50_000,
+      escrowStatus: TransactionState.PAYMENT_PENDING,
+      paymentStatus: PaymentStatus.PENDING,
+      stateHistory: [],
+    });
+
+    parseWebhookMock.mockResolvedValue({
+      providerEventId: 'evt-amount-ok',
+      reference: 'GM-AMT-2',
+      status: 'CONFIRMED',
+      amount: 50_000,
+      rawPayload: {},
+    });
+
+    await PaymentService.handleWebhook({}, {});
+
+    const updated = await fakeTransactionModel.findById(txn._id);
+    expect(updated!.escrowStatus).toBe(TransactionState.ESCROW_ACTIVE);
+  });
+
+  it('ne compare rien quand le provider ne certifie pas de montant', async () => {
+    // PayDunya ne lie aucun contenu à son hash : amount reste undefined et
+    // le rapprochement se fait uniquement sur la référence, comme avant.
+    const txn = await fakeTransactionModel.create({
+      paymentReference: 'GM-AMT-3',
+      amount: 50_000,
+      escrowStatus: TransactionState.PAYMENT_PENDING,
+      paymentStatus: PaymentStatus.PENDING,
+      stateHistory: [],
+    });
+
+    parseWebhookMock.mockResolvedValue({
+      providerEventId: 'evt-amount-absent',
+      reference: 'GM-AMT-3',
+      status: 'CONFIRMED',
+      rawPayload: {},
+    });
+
+    await PaymentService.handleWebhook({}, {});
+
+    const updated = await fakeTransactionModel.findById(txn._id);
+    expect(updated!.escrowStatus).toBe(TransactionState.ESCROW_ACTIVE);
   });
 });

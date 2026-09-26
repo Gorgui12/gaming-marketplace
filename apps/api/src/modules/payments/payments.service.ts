@@ -162,6 +162,31 @@ export class PaymentService {
       return;
     }
 
+    // Le montant n'est exploitable que si le provider le certifie (champ
+    // couvert par la vérification d'intégrité — cf. WebhookEvent.amount).
+    // Un écart SIGNÉ est alors nécessairement soit une erreur de
+    // configuration (montant envoyé ≠ montant attendu), soit une tentative
+    // de solder une commande avec un encaissement inférieur. Dans les deux
+    // cas on refuse de toucher à la state machine : c'est une décision
+    // financière, pas une décision technique.
+    if (event.amount !== undefined && event.amount !== transaction.amount) {
+      logger.error(
+        {
+          reference: event.reference,
+          providerEventId: event.providerEventId,
+          expectedAmount: transaction.amount,
+          receivedAmount: event.amount,
+          currency: transaction.currency,
+        },
+        'Webhook rejeté : montant encaissé différent du montant de la transaction',
+      );
+      throw new AppError(
+        ErrorCode.PAYMENT_INIT_FAILED,
+        'Montant du webhook incohérent avec la transaction',
+        400,
+      );
+    }
+
     try {
       await PaymentEventModel.create({
         transaction: transaction._id,

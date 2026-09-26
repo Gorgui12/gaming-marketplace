@@ -92,6 +92,7 @@ function attachInstanceMethods<T extends Doc>(doc: T, store: Map<string, Doc>): 
 interface SingleQueryChain<T> extends Promise<T | null> {
   select(fields: string): SingleQueryChain<T>;
   sort(spec: Record<string, 1 | -1>): SingleQueryChain<T>;
+  lean(): SingleQueryChain<T>;
 }
 
 function makeSingleQueryChain<T extends Doc>(
@@ -104,6 +105,11 @@ function makeSingleQueryChain<T extends Doc>(
     },
     sort(spec: Record<string, 1 | -1>) {
       sortSpec = spec;
+      return chain;
+    },
+    // `lean()` est un no-op côté fake : présent pour que le code testé puisse
+    // chaîner .select().lean() comme en Mongoose.
+    lean() {
       return chain;
     },
     then(onFulfilled: (v: T | null) => unknown, onRejected?: (e: unknown) => unknown) {
@@ -120,6 +126,7 @@ interface QueryChain<T> extends Promise<T[]> {
   skip(n: number): QueryChain<T>;
   limit(n: number): QueryChain<T>;
   select(fields: string): QueryChain<T>;
+  lean(): QueryChain<T>;
 }
 
 function makeQueryChain<T extends Doc>(items: T[]): QueryChain<T> {
@@ -145,6 +152,9 @@ function makeQueryChain<T extends Doc>(items: T[]): QueryChain<T> {
       return chain;
     },
     select() {
+      return chain;
+    },
+    lean() {
       return chain;
     },
     then(onFulfilled: (v: T[]) => unknown, onRejected?: (e: unknown) => unknown) {

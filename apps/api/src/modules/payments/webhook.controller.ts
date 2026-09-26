@@ -4,24 +4,27 @@ import { PaymentService } from './payments.service.js';
 import { logger } from '../../lib/logger.js';
 
 /**
- * Toujours répondre 200 rapidement une fois l'IPN acquitté (même si déjà
- * traité) — le provider retente en cas d'erreur, ce qui est acceptable,
- * mais on ne veut pas provoquer de retries inutiles sur une erreur de
- * traitement qui ne se résoudra pas par un simple retry.
- *
  * Contrôleur générique pour toutes les routes webhook de paiement: il
  * délègue à PaymentService.handleWebhook, qui utilise le provider actif
  * via la configuration (PAYMENT_PROVIDER). Une seule implémentation sert
  * donc à la fois l'IPN PayDunya et le webhook UnitechPay.
+ *
+ * Politique de réponse, volontairement stricte :
+ *  - 4xx (signature invalide, payload malformé, montant incohérent) → on
+ *    remonte l'erreur. Le provider voit un échec et retentera, ce qui est le
+ *    bon comportement : acquitter un webhook qu'on a refusé de traiter
+ *    masquerait définitivement la livraison.
+ *  - 5xx / erreur inattendue → on acquitte quand même en 200. Une erreur
+ *    interne ne se résoudra pas par un retry, et le provider qui boucle
+ *    sur un bug de notre côté finit par nous bloquer.
  */
 export const handlePaymentWebhook = asyncHandler(async (req: Request, res: Response) => {
   try {
     await PaymentService.handleWebhook(req.body, req.headers as Record<string, string>);
   } catch (err) {
     logger.error({ err }, 'Erreur traitement webhook de paiement');
-    // Exception: erreur de signature invalide -> on laisse remonter en 401
-    // pour qu'un vrai flood malveillant ne soit pas silencieusement accepté.
-    if ((err as { statusCode?: number })?.statusCode === 401) {
+    const statusCode = (err as { statusCode?: number })?.statusCode;
+    if (typeof statusCode === 'number' && statusCode < 500) {
       throw err;
     }
   }

@@ -28,10 +28,25 @@ function setSessionCookie(res: Response, token: string): void {
   });
 }
 
+/**
+ * Émet le cookie de session en reprenant la version de session du compte.
+ * Ce `sessionVersion` est rejoué dans `attachUser` : s'il diffère de celui
+ * en base, le cookie est rejeté. C'est ce qui permet de révoquer les
+ * sessions d'un utilisateur (bannissement, changement de rôle, de mot de
+ * passe) sans attendre l'expiration du cookie.
+ */
+function sessionTokenFor(user: {
+  _id: unknown;
+  roles: string[];
+  sessionVersion?: number;
+}): string {
+  return createSessionToken(String(user._id), user.roles, user.sessionVersion ?? 0);
+}
+
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const input = registerSchema.parse(req.body);
   const user = await AuthService.register(input);
-  const token = createSessionToken(String(user._id), user.roles);
+  const token = sessionTokenFor(user);
   setSessionCookie(res, token);
   res.status(201).json({
     success: true,
@@ -42,7 +57,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const input = loginSchema.parse(req.body);
   const user = await AuthService.login(input);
-  const token = createSessionToken(String(user._id), user.roles);
+  const token = sessionTokenFor(user);
   setSessionCookie(res, token);
   res.status(200).json({
     success: true,
@@ -73,7 +88,7 @@ export const forgotPassword = asyncHandler(async (req: Request, res: Response) =
 export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
   const input = resetPasswordSchema.parse(req.body);
   const user = await AuthService.resetPassword(input);
-  const token = createSessionToken(String(user._id), user.roles);
+  const token = sessionTokenFor(user);
   setSessionCookie(res, token);
   res.status(200).json({
     success: true,
@@ -84,7 +99,7 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
 export const googleAuth = asyncHandler(async (req: Request, res: Response) => {
   const input = googleAuthSchema.parse(req.body);
   const user = await AuthService.googleAuth(input);
-  const token = createSessionToken(String(user._id), user.roles);
+  const token = sessionTokenFor(user);
   setSessionCookie(res, token);
   res.status(200).json({
     success: true,

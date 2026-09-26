@@ -5,21 +5,27 @@ export interface SessionPayload {
   userId: string;
   roles: string[];
   issuedAt: number;
+  /**
+   * Valeur de `user.sessionVersion` au moment de l'émission. Permet de
+   * révoquer les cookies déjà distribués : il suffit d'incrémenter le
+   * champ en base (bannissement, changement de rôle, changement de mot de
+   * passe) pour que les anciens tokens ne passent plus `attachUser`.
+   * Absent des tokens émis avant ce champ : traité comme 0, donc valide
+   * uniquement si l'utilisateur est toujours à 0.
+   */
+  sessionVersion?: number;
 }
 
-/**
- * Implémentation simple signée HMAC pour la Phase 1. Suffisant pour démarrer
- * le développement; à réévaluer en Phase 2 (voir docs/SECURITY.md) pour la
- * révocation immédiate — un store de session en base (ou Redis) permettrait
- * une invalidation instantanée, ce qu'un token purement signé ne permet pas
- * sans rotation de secret globale.
- */
 function sign(payload: string): string {
   return createHmac('sha256', env.SESSION_SECRET).update(payload).digest('base64url');
 }
 
-export function createSessionToken(userId: string, roles: string[]): string {
-  const payload: SessionPayload = { userId, roles, issuedAt: Date.now() };
+export function createSessionToken(
+  userId: string,
+  roles: string[],
+  sessionVersion = 0,
+): string {
+  const payload: SessionPayload = { userId, roles, issuedAt: Date.now(), sessionVersion };
   const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = sign(payloadStr);
   return `${payloadStr}.${signature}`;
@@ -27,7 +33,7 @@ export function createSessionToken(userId: string, roles: string[]): string {
 
 export function verifySessionToken(
   token: string,
-): { userId: string; roles: string[] } | null {
+): { userId: string; roles: string[]; sessionVersion: number } | null {
   const [payloadStr, signature] = token.split('.');
   if (!payloadStr || !signature) return null;
 
@@ -42,7 +48,11 @@ export function verifySessionToken(
     const payload = JSON.parse(Buffer.from(payloadStr, 'base64url').toString('utf8')) as SessionPayload;
     const maxAgeMs = env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
     if (Date.now() - payload.issuedAt > maxAgeMs) return null;
-    return { userId: payload.userId, roles: payload.roles };
+    return {
+      userId: payload.userId,
+      roles: payload.roles,
+      sessionVersion: payload.sessionVersion ?? 0,
+    };
   } catch {
     return null;
   }

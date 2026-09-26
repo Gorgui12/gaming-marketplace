@@ -44,6 +44,28 @@ describe('UnitechPayProvider.parseWebhook', () => {
     expect(event.rawPayload).toBeTruthy();
   });
 
+  it('remonte le montant signé, qui sert à valider la transaction', async () => {
+    // Le montant fait partie de la chaîne signée : il est donc digne de
+    // confiance et PaymentService.handleWebhook s'en sert pour refuser de
+    // solder si l'encaissement ne correspond pas au montant attendu.
+    const event = await provider.parseWebhook(signedWebhook({ amount: 15000 }), {});
+
+    expect(event.amount).toBe(15000);
+  });
+
+  it('remonte un montant absent plutôt que NaN', async () => {
+    const payload = signedWebhook();
+    // On retire amount PUIS on resigne : la signature doit rester valide
+    // (champ vide dans la chaîne canonique) mais le montant n'est pas
+    // exploitable, donc parseWebhook ne doit pas remonter de nombre invalide.
+    payload.amount = '';
+    payload.signature = sign(payload as never);
+
+    const event = await provider.parseWebhook(payload, {});
+
+    expect(event.amount).toBeUndefined();
+  });
+
   it('maps payment_failed -> FAILED and payment_expired -> CANCELLED', async () => {
     const failed = await provider.parseWebhook(
       signedWebhook({ event: 'payment_failed', status: 'failed' }),

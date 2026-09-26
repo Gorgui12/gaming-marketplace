@@ -87,6 +87,12 @@ export const updateUserStatus = asyncHandler(async (req: Request, res: Response)
   }
 
   user.status = status;
+  // Invalide immédiatement les cookies déjà émis : attachUser compare le
+  // sessionVersion du token à celui en base. Sans cet incrément, un compte
+  // banni resterait utilisable jusqu'à l'expiration de sa session (7 jours),
+  // et pourrait se reconnecter... ce que le refus de login empêche
+  // désormais, mais le cookie existant resterait valide.
+  user.sessionVersion = (user.sessionVersion ?? 0) + 1;
   await user.save();
 
   await AuditService.log({
@@ -146,6 +152,12 @@ export const updateUserRoles = asyncHandler(async (req: Request, res: Response) 
   }
 
   target.roles = roles as UserRole[];
+  // Même raison que pour le statut : sans cet incrément, un cookie émis
+  // avant la rétrogradation conserverait ses vieux rôles (lus en base, mais
+  // sur un compte dont la version n'a pas bougé) pendant toute la durée de
+  // vie de la session. Ici on veut l'inverse : couper l'accès admin sur-le-
+  // champ, donc on invalide les sessions en cours.
+  target.sessionVersion = (target.sessionVersion ?? 0) + 1;
   await target.save();
 
   await AuditService.log({
