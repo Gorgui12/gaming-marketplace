@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import mongoSanitize from 'express-mongo-sanitize';
 import { pinoHttp } from 'pino-http';
-import { corsAllowedOrigins } from './config/env.js';
+import { env, corsAllowedOrigins } from './config/env.js';
 import { logger } from './lib/logger.js';
 import { attachUser } from './middlewares/auth.middleware.js';
 import { globalRateLimiter } from './middlewares/rate-limit.middleware.js';
@@ -32,12 +32,15 @@ import { adminBlogRouter } from './modules/blog/admin-blog.routes.js';
 export function createApp(): Express {
   const app = express();
 
-  // Derrière le proxy Fly, `req.ip` et `req.protocol` ne sont corrects que si
-  // Express fait confiance au proxy. Sans ça, TOUS les clients partagent
-  // l'IP du proxy et tombent dans un seul bucket de rate limit (ce que
-  // express-rate-limit v7 signale par ailleurs), et `req.secure` reste false
-  // malgré le TLS. `1` = exactement un saut de confiance, soit le proxy Fly.
-  app.set('trust proxy', 1);
+  // Derrière un proxy, `req.ip` et `req.protocol` ne sont corrects que si
+  // Express fait confiance au proxy. Sans ça, TOUS les clients partagent l'IP
+  // du proxy et tombent dans un seul bucket de rate limit (ce que
+  // express-rate-limit v7 signale d'ailleurs), `req.secure` reste false malgré
+  // le TLS, et le hachage d'IP de l'anti-fraude affiliés perd toute granularité.
+  // Le nombre de sauts dépend de l'hébergeur (Render 2, Fly 1, local 0) : il
+  // vient de TRUST_PROXY_HOPS, 0 par défaut car un nombre faux est pire
+  // qu'un absent — il faut le poser explicitement en production.
+  app.set('trust proxy', env.TRUST_PROXY_HOPS);
 
   app.use(helmet());
   app.use(

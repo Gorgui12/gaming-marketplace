@@ -54,6 +54,17 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
 
+  // Nombre de proxys de confiance devant l'API, pour que `req.ip` vaille
+  // l'IP réelle du client et non celle du proxy. Le nombre de sauts diffère
+  // selon l'hébergeur, d'où une variable plutôt qu'une constante en dur :
+  //   - Render  = 2 (proxy Render, puis Cloudflare devant lui)
+  //   - Fly.io  = 1 (proxy Fly seul)
+  //   - local   = 0 (requête directe, aucun proxy)
+  // Une valeur trop basse fait retomber tous les clients sur l'IP du proxy :
+  // ils partagent alors un seul bucket de rate limit, et l'anti-fraude affiliés
+  // (hash de req.ip) les voit tous venir de la même origine.
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+
   ACCOUNT_CREDENTIALS_ENCRYPTION_KEY: z
     .string()
     .min(32, 'ACCOUNT_CREDENTIALS_ENCRYPTION_KEY doit faire au moins 32 caractères'),

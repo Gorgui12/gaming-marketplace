@@ -119,10 +119,11 @@ RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=100
 RESEND_FROM=Gaming Marketplace <noreply@gamingmarket.store>
 GOOGLE_CLIENT_ID=931697051716-3h1m5velt5e7kev2n5srdpfonvuhc1ja.apps.googleusercontent.com
+TRUST_PROXY_HOPS=2
 NODE_OPTIONS=--max-old-space-size=384
 ```
 
-Trois de ces variables ne sont pas décoratives :
+Quatre de ces variables ne sont pas décoratives :
 
 - `NODE_ENV=production` pilote les cookies de session : `secure: true` et
   `sameSite: 'none'` (`auth.controller.ts:15-21`). Sans lui les cookies partent en
@@ -134,6 +135,31 @@ Trois de ces variables ne sont pas décoratives :
   l'API en cross-origin depuis le navigateur.
 - `NODE_OPTIONS` bride le heap V8 sous la limite de 512 Mo du conteneur. À
   retirer si les logs ne montrent aucun `JavaScript heap out of memory`.
+
+### 3.1 TRUST_PROXY_HOPS : à ne pas oublier
+
+**2 sur Render, 1 sur Fly.io, 0 en local.** Le nombre de proxies devant l'API
+dépend de l'hébergeur, et une valeur fausse dégrade deux choses en silence :
+
+- **Rate limit** — les clients dont les requêtes traversent le même proxy de bord
+  partagent un bucket. Sur l'instance gratuite, cela réduit la protection contre
+  le brute-force.
+- **Anti-fraude affiliés** — `affiliates.controller.ts:43` hache `req.ip` pour
+  détecter un débit de clics anormal depuis une même origine. Si `req.ip` vaut
+  l'IP de Cloudflare, tous les visiteurs du monde sont vus comme une seule
+  origine : la détection ne peut plus rien distinguer.
+
+Le cas Render vaut 2, et c'est vérifiable dans les logs. Render place l'instance
+derrière Cloudflare, d'où trois entrées :
+
+```
+x-forwarded-for: <IP client>, <IP Cloudflare>, <IP proxy Render>
+```
+
+À `0` ou `1`, `req.ip` s'arrête à l'IP Cloudflare au lieu du client. Pour
+vérifier après avoir posé la variable : dans les logs Render, `remoteAddress` reste
+`127.0.0.1` (c'est normal, le proxy est local), mais le `req.ip` exploité par le
+rate limiter doit correspondre à l'IP du visiteur.
 
 
 ## 4. Secrets
@@ -171,16 +197,28 @@ Redéployer les deux projets Vercel après avoir changé la variable.
 
 ## 6. Migrer l'URL de webhook du prestataire de paiement
 
-**Étape obligatoire, facile à oublier.** `API_PUBLIC_URL` n'est pas cosmétique :
-elle construit l'URL de notification que l'API renvoie au prestataire lors de la
-création d'une transaction (`payments.service.ts:66`). Tant que le dashboard du
-prestataire pointe encore vers l'ancien domaine, les paiements sont créés mais
-aucun webhook n'arrive, et les annonces restent bloquées en `PAYMENT_PENDING`.
+**Étape obligatoire, facile à oublier.** Tant que le prestataire pointe encore
+vers l'ancien domaine, les paiements sont créés mais aucune confirmation
+n'arrive, et les annonces restent bloquées en `PAYMENT_PENDING`.
 
-- `PAYMENT_PROVIDER=unitechpay` → `API_PUBLIC_URL + /api/v1/payments/unitechpay/webhook`
-- `PAYMENT_PROVIDER=paydunya` → `API_PUBLIC_URL + PAYDUNYA_IPN_PATH`
+Le chemin **diffère selon le provider actif**, et c'est une piège :
 
-Voir `docs/PAYMENTS.md` §« IPN / webhook ».
+- `PAYMENT_PROVIDER=unitechpay` — l'URL de webhook **n'est pas envoyée à
+  UnitechPay** lors de la création du paiement. `unitechpay.provider.ts:97-106`
+  ne transmet que `callback_success` et `callback_cancel` (les URL de retour
+  navigateur), jamais `notifyUrl`. L'IPN doit donc être reconfigurée **chez
+  UnitechPay**, via un appel unique de l'action `configure_webhook` pointant
+  vers `https://<service>.onrender.com/api/v1/payments/unitechpay/webhook`.
+  Voir `docs/PAYMENTS.md` §« Configuration du webhook côté UnitechPay ».
+  Concrètement : `API_PUBLIC_URL` n'intervient pas dans ce chemin.
+- `PAYMENT_PROVIDER=paydunya` — là, `API_PUBLIC_URL` est bien utilisé : il
+  compose le `callbackURL` envoyé au prestataire à chaque initiation
+  (`payments.service.ts:66` et `paydunya.provider.ts:90`).
+
+`API_PUBLIC_URL` reste à maintenir exact dans tous les cas : c'est lui qui
+servira le jour où le provider basculera sur PayDunya, et c'est la seule
+référence de l'URL publique côté API.
+
 
 ## 7. Garder le service éveillé
 
