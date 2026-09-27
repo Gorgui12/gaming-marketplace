@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middlewares/auth.middleware.js';
+import { requireAuth, requireEmailVerified } from '../../middlewares/auth.middleware.js';
 import { getMe, getPublicProfile, updateMe } from './users.controller.js';
 
 export const usersRouter = Router();
@@ -7,7 +7,7 @@ export const usersRouter = Router();
 // Profil de l'utilisateur connecté — déclaré avant /:username pour ne pas
 // être capturé par le paramètre dynamic.
 usersRouter.get('/me', requireAuth, getMe);
-usersRouter.patch('/me', requireAuth, updateMe);
+usersRouter.patch('/me', requireAuth, requireEmailVerified, updateMe);
 
 // Profil public minimal — jamais d'email, de téléphone ni de données
 // sensibles. Utilisé par la page /seller/[username].

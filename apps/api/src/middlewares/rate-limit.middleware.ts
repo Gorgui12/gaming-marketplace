@@ -24,6 +24,47 @@ export const authRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limit du renvoi du lien de confirmation.
+ *
+ * Volontairement plus strict que `authRateLimiter` : cette route envoie un
+ * email VERS une adresse fournie par l'appelant, donc elle peut servir à
+ * harceler la boîte d'un tiers. 3 tentatives par quart d'heure laisse le cas
+ * légitime (« mon email est en spam ») très comfortably au-dessus du besoin.
+ */
+export const emailResendRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Trop de demandes de renvoi. Réessayez dans quelques minutes.',
+    },
+  },
+});
+
+/**
+ * Rate limit du diagnostic d'email avant inscription.
+ *
+ * Limiteur SÉPARÉ de `authRateLimiter` : ce dernier est partagé avec login et
+ * register, et or le diagnostic se déclenche à la sortie du champ email. Sans
+ * ce bucket dédié, taper trois fois dans le champ puis essayer de s'inscrire
+ * ferait tomber l'inscription dans le quota du login.
+ */
+export const emailCheckRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { code: 'RATE_LIMITED', message: 'Trop de vérifications d\'adresse. Réessayez plus tard.' },
+  },
+});
+
+/**
  * Rate limit dédié aux webhooks entrants — plus permissif car le provider
  * peut retenter légitimement, mais protège contre un flood malveillant.
  */

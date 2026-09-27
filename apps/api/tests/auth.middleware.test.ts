@@ -9,7 +9,7 @@ vi.mock('../src/modules/users/user.model.js', () => ({
   UserModel: fakeUserModel,
 }));
 
-const { attachUser } = await import('../src/middlewares/auth.middleware.js');
+const { attachUser, requireEmailVerified } = await import('../src/middlewares/auth.middleware.js');
 const { createSessionToken } = await import('../src/modules/auth/session.js');
 
 /**
@@ -56,7 +56,7 @@ describe('attachUser — révocation et bannissement', () => {
     const id = await seedUser({ roles: [UserRole.USER] });
     const req = await runAttachUser(createSessionToken(id, [UserRole.USER], 0));
 
-    expect(req.user).toEqual({ id, roles: [UserRole.USER] });
+    expect(req.user).toEqual({ id, roles: [UserRole.USER], emailVerified: true });
   });
 
   it('refuse un compte BANNED même avec un cookie valide', async () => {
@@ -95,7 +95,7 @@ describe('attachUser — révocation et bannissement', () => {
     const id = await seedUser({ sessionVersion: 2 });
     const req = await runAttachUser(createSessionToken(id, [UserRole.USER], 2));
 
-    expect(req.user).toEqual({ id, roles: [UserRole.USER] });
+    expect(req.user).toEqual({ id, roles: [UserRole.USER], emailVerified: true });
   });
 
   it('ignore un utilisateur absent de la base', async () => {
@@ -108,5 +108,101 @@ describe('attachUser — révocation et bannissement', () => {
     const req = await runAttachUser(undefined);
 
     expect(req.user).toBeUndefined();
+  });
+});
+
+/**
+ * emailVerified est relu en base à chaque requête, exactement comme `status`.
+ * C'est indispensable : le cookie est émis AVANT la confirmation (pour laisser
+ * naviguer), donc un cookie ancien ne peut pas transporter un « non vérifié »
+ * figé — l'utilisateur resterait bloqué même après avoir cliqué sur le lien.
+ */
+describe('attachUser — emailVerified', () => {
+  beforeEach(() => {
+    fakeUserModel.__reset();
+  });
+
+  it('propage emailVerified: false pour un compte non confirmé', async () => {
+    const id = await seedUser({ emailVerified: false });
+    const req = await runAttachUser(createSessionToken(id, [UserRole.USER], 0));
+
+    expect(req.user?.emailVerified).toBe(false);
+  });
+
+  it('propage emailVerified: true', async () => {
+    const id = await seedUser({ emailVerified: true });
+    const req = await runAttachUser(createSessionToken(id, [UserRole.USER], 0));
+
+    expect(req.user?.emailVerified).toBe(true);
+  });
+
+  it('bascule à true dès la requête suivant une confirmation, sans réémettre de cookie', async () => {
+    const id = await seedUser({ emailVerified: false });
+    const token = createSessionToken(id, [UserRole.USER], 0);
+
+    const avant = await runAttachUser(token);
+    expect(avant.user?.emailVerified).toBe(false);
+
+    // L'utilisateur clique sur le lien : la base passe à true.
+    const stored = fakeUserModel.__store.get(id);
+    stored!.emailVerified = true;
+
+    // MÊME cookie qu'avant la confirmation.
+    const apres = await runAttachUser(token);
+    expect(apres.user?.emailVerified).toBe(true);
+  });
+
+  it('traite un compte sans le champ comme vérifié (pas de blocage rétroactif)', async () => {
+    // Les comptes créés avant l'introduction de la confirmation n'ont pas le
+    // champ en base. Les bloquer tous d'un coup à la mise en production
+    // casserait des comptes légitimes d'un coup : ils doivent passer.
+    const id = await seedUser({});
+    expect(fakeUserModel.__store.get(id)!.emailVerified).toBeUndefined();
+
+    const req = await runAttachUser(createSessionToken(id, [UserRole.USER], 0));
+
+    expect(req.user?.emailVerified).toBe(true);
+  });
+});
+
+function runRequireEmailVerified(req: Request): Promise<Error | undefined> {
+  const res = {} as Response;
+  return new Promise((resolve) => {
+    const next = ((err?: unknown) => {
+      resolve(err as Error | undefined);
+    }) as NextFunction;
+    requireEmailVerified(req, res, next);
+  });
+}
+
+function reqAs(user: { id: string; roles: string[]; emailVerified: boolean } | undefined): Request {
+  return { user } as unknown as Request;
+}
+
+describe('requireEmailVerified', () => {
+  it('laisse passer un compte confirmé', async () => {
+    const err = await runRequireEmailVerified(
+      reqAs({ id: 'u1', roles: [UserRole.USER], emailVerified: true }),
+    );
+
+    expect(err).toBeUndefined();
+  });
+
+  it('refuse un compte non confirmé avec EMAIL_NOT_VERIFIED en 403', async () => {
+    const err = await runRequireEmailVerified(
+      reqAs({ id: 'u1', roles: [UserRole.USER], emailVerified: false }),
+    );
+
+    expect(err).toBeDefined();
+    expect((err as { code?: string }).code).toBe('EMAIL_NOT_VERIFIED');
+    expect((err as { statusCode?: number }).statusCode).toBe(403);
+  });
+
+  it('refuse une requête non authentifiée (401, pas 403)', async () => {
+    // requireEmailVerified est posé APRÈS requireAuth dans toutes les routes,
+    // mais il ne doit pas se comporter en laisse-passer si on l'oublie.
+    const err = await runRequireEmailVerified(reqAs(undefined));
+
+    expect((err as { statusCode?: number }).statusCode).toBe(401);
   });
 });

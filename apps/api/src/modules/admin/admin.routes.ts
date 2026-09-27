@@ -6,6 +6,7 @@ import { getAdminStats } from './admin-stats.controller.js';
 import {
   deleteAdminUser,
   listAdminUsers,
+  updateUserEmailVerified,
   updateUserRoles,
   updateUserStatus,
 } from './admin-users.controller.js';
@@ -30,6 +31,7 @@ adminRouter.post('/email/test', testEmail);
 // Utilisateurs
 adminRouter.get('/users', listAdminUsers);
 adminRouter.patch('/users/:id/status', updateUserStatus);
+adminRouter.patch('/users/:id/email-verified', updateUserEmailVerified);
 adminRouter.patch('/users/:id/roles', updateUserRoles);
 adminRouter.delete('/users/:id', deleteAdminUser);
 

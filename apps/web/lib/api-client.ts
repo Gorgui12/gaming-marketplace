@@ -14,6 +14,31 @@ const API_BASE =
 
 const API_TIMEOUT_MS = 15000;
 
+/**
+ * Erreur renvoyée par l'API quand le compte n'a pas encore confirmé son email
+ * et tente une action engageante (publier une annonce, acheter, envoyer un
+ * message, poster un avis, modifier son profil).
+ *
+ * Portée volontairement large : le garde-fou est posé côté API, donc n'importe
+ * quelle page peut le déclencher. Plutôt que de traiter le cas dans chaque
+ * écran appelant, `apiFetch` redirige vers la page de confirmation — c'est le
+ * seul endroit où l'utilisateur peut corriger le problème.
+ */
+export class EmailNotVerifiedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EmailNotVerifiedError';
+  }
+}
+
+function isEmailNotVerified(body: ApiResponse<unknown> | null): boolean {
+  return (
+    !!body &&
+    body.success === false &&
+    body.error.code === 'EMAIL_NOT_VERIFIED'
+  );
+}
+
 export async function apiFetch<T>(
   path: string,
   init?: RequestInit & { json?: unknown },
@@ -36,6 +61,14 @@ export async function apiFetch<T>(
 
   if (!res.ok || !body || body.success === false) {
     if (body && body.success === false) {
+      // Cas particulier du garde-fou email : plutôt que d'afficher une erreur
+      // morte dans une modale, on emmène l'utilisateur là où il peut agir.
+      if (isEmailNotVerified(body)) {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/verify-email')) {
+          window.location.assign('/verify-email');
+        }
+        throw new EmailNotVerifiedError(body.error.message);
+      }
       const details = body.error.details as
         | { fieldErrors?: Record<string, string[]>; formErrors?: string[] }
         | undefined;

@@ -1,7 +1,11 @@
 import { z } from 'zod';
+import { emailFieldSchema } from './email.js';
 
 export const registerSchema = z.object({
-  email: z.string().email(),
+  // Champ partagé avec le formulaire web : rejette les adresses qui ne
+  // peuvent pas fonctionner (domaine jetable, TLD réservé) avant même
+  // d'atteindre la base. La délivrabilité réelle est vérifiée par l'API.
+  email: emailFieldSchema,
   phone: z.string().min(8).max(20).optional(),
   password: z
     .string()
@@ -54,3 +58,28 @@ export const verifyEmailSchema = z.object({
   token: z.string().min(1, 'Token manquant'),
 });
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
+/**
+ * Demande de renvoi du lien de confirmation.
+ *
+ * `email` est facultatif : lorsqu'une session est ouverte, l'API retrouve le
+ * compte tout seul. C'est le cas d'usage principal (l'utilisateur vient de
+ * s'inscrire ou de se connecter) et cela évite de faire circuler son adresse
+ * dans l'URL de la page. Le champ reste accepté pour le cas où la session a
+ * été perdue — l'API renvoie alors toujours la même réponse.
+ */
+export const resendVerificationSchema = z.object({
+  email: z.string().email().optional(),
+});
+export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
+
+/**
+ * Analyse d'un email AVANT l'inscription. Volontairement sans contrainte de
+ * format : c'est précisément le rôle de cette route que de diagnostiquer une
+ * adresse mal formée au lieu de la rejeter bêtement. Aucun accès à la base —
+ * donc aucun risque d'énumération de comptes.
+ */
+export const checkEmailSchema = z.object({
+  email: z.string().min(1, 'Email manquant').max(320),
+});
+export type CheckEmailInput = z.infer<typeof checkEmailSchema>;

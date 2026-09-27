@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { createReviewSchema } from '@gm/validation';
 import { asyncHandler } from '../../lib/async-handler.js';
-import { requireAuth } from '../../middlewares/auth.middleware.js';
+import { requireAuth, requireEmailVerified } from '../../middlewares/auth.middleware.js';
 import { ReviewsService } from './reviews.service.js';
 
 export const reviewsRouter = Router();
@@ -11,6 +11,7 @@ export const reviewsRouter = Router();
 reviewsRouter.post(
   '/',
   requireAuth,
+  requireEmailVerified,
   asyncHandler(async (req: Request, res: Response) => {
     const input = createReviewSchema.parse(req.body);
     const review = await ReviewsService.create({

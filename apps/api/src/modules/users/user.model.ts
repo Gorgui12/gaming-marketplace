@@ -11,6 +11,10 @@ const userSchema = new Schema(
     passwordResetExpires: { type: Date, select: false },
     emailVerifyToken: { type: String, select: false },
     emailVerifyExpires: { type: Date, select: false },
+    // Date du dernier envoi du lien, utilisée pour imposer un délai entre deux
+    // renvois. `emailVerifyExpires` ne peut pas jouer ce rôle : c'est la
+    // date d'expiration du token (24 h), pas l'heure d'envoi.
+    emailVerifySentAt: { type: Date, select: false },
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },

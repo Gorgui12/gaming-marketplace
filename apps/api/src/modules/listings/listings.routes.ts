@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middlewares/auth.middleware.js';
+import { requireAuth, requireEmailVerified } from '../../middlewares/auth.middleware.js';
 import {
   createListing,
   getListingBySlug,
@@ -14,4 +14,5 @@ listingsRouter.get('/', searchListings);
 // interprète "mine" comme une valeur de :slug.
 listingsRouter.get('/mine', requireAuth, listMyListings);
 listingsRouter.get('/:slug', getListingBySlug);
-listingsRouter.post('/', requireAuth, createListing);
+// Publier une annonce = engagement commercial : réservé aux emails confirmés.
+listingsRouter.post('/', requireAuth, requireEmailVerified, createListing);

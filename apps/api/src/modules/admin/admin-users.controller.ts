@@ -34,6 +34,12 @@ export const listAdminUsers = asyncHandler(async (req: Request, res: Response) =
     .object({
       search: z.string().trim().max(200).optional(),
       status: z.enum(Object.values(UserAccountStatus) as [string, ...string[]]).optional(),
+      // Filtre des comptes dont l'email n'a jamais été confirmé : c'est la
+      // liste des comptes potentiellement fantômes à examiner.
+      emailVerified: z
+        .enum(['true', 'false'])
+        .optional()
+        .transform((v) => (v === undefined ? undefined : v === 'true')),
       page: z.coerce.number().int().positive().default(1),
       pageSize: z.coerce.number().int().positive().max(USER_SEARCH_MAX).default(20),
     })
@@ -41,6 +47,7 @@ export const listAdminUsers = asyncHandler(async (req: Request, res: Response) =
 
   const filter: Record<string, unknown> = {};
   if (query.status) filter.status = query.status;
+  if (query.emailVerified !== undefined) filter.emailVerified = query.emailVerified;
   if (query.search) {
     const rx = new RegExp(query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     filter.$or = [{ email: rx }, { username: rx }, { firstName: rx }, { lastName: rx }];
@@ -122,10 +129,64 @@ export const updateUserStatus = asyncHandler(async (req: Request, res: Response)
   });
 });
 
+const updateEmailVerifiedSchema = z.object({
+  emailVerified: z.boolean(),
+});
+
+/**
+ * Validation (ou dévalidation) manuelle de l'email d'un compte.
+ *
+ * Filet de sécurité indispensable maintenant que les actions engageantes sont
+ * bloquées sans confirmation : si le lien est perdu et que le support ne peut
+ * pas joindre l'utilisateur, un admin doit pouvoir trancher.
+ *
+ * Contrairement au changement de statut, AUCUN incrément de sessionVersion :
+ * `attachUser` relit `emailVerified` en base à chaque requête, donc la
+ * nouvelle valeur s'applique à la requête suivante, sans attendre l'expiration
+ * du cookie.
+ */
+export const updateUserEmailVerified = asyncHandler(async (req: Request, res: Response) => {
+  const { emailVerified } = updateEmailVerifiedSchema.parse(req.body);
+  const userId = req.params.id!;
+  const actor = req.user!;
+
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    throw AppError.notFound(ErrorCode.NOT_FOUND, 'Utilisateur introuvable');
+  }
+
+  // Garde-fou anti-lock-out : un admin ne doit pas pouvoir se retirer sa
+  // propre validation et se retrouver bloqué sur les actions engageantes.
+  if (userId === actor.id && !emailVerified) {
+    throw AppError.forbidden(
+      'Vous ne pouvez pas retirer la validation email de votre propre compte',
+    );
+  }
+
+  user.emailVerified = emailVerified;
+  // Purge le token en cours : il ne doit plus pouvoir valider un email qui
+  // n'est peut-être plus celui du compte.
+  user.emailVerifyToken = undefined;
+  user.emailVerifyExpires = undefined;
+  await user.save();
+
+  await AuditService.log({
+    actor: actor.id,
+    action: emailVerified ? 'admin.user_email_verified' : 'admin.user_email_unverified',
+    entityType: 'User',
+    entityId: userId,
+    metadata: { email: user.email },
+  });
+
+  res.status(200).json({
+    success: true,
+    data: { id: user._id, email: user.email, emailVerified: user.emailVerified },
+  });
+});
+
 const updateRolesSchema = z.object({
   roles: z.array(z.enum(Object.values(UserRole) as [string, ...string[]])).min(1),
 });
-
 export const updateUserRoles = asyncHandler(async (req: Request, res: Response) => {
   const { roles } = updateRolesSchema.parse(req.body);
   const actor = req.user!;

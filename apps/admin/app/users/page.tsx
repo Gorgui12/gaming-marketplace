@@ -14,6 +14,7 @@ interface AdminUser {
   country: string;
   roles: string[];
   status: string;
+  emailVerified: boolean;
   sellerStatus: string;
   transactionCount: number;
   successfulSales: number;
@@ -33,6 +34,7 @@ export default function AdminUsersPage() {
   } | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [emailFilter, setEmailFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -43,6 +45,7 @@ export default function AdminUsersPage() {
       const params = new URLSearchParams({ page: String(page), pageSize: '20' });
       if (search.trim()) params.set('search', search.trim());
       if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (emailFilter !== 'ALL') params.set('emailVerified', emailFilter);
       const res = await apiFetch<{ users: AdminUser[]; page: number; totalPages: number; total: number }>(
         `/api/v1/admin/users?${params.toString()}`,
       );
@@ -50,7 +53,7 @@ export default function AdminUsersPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     }
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, emailFilter]);
 
   useEffect(() => {
     load();
@@ -61,6 +64,22 @@ export default function AdminUsersPage() {
     setError('');
     try {
       await apiFetch(`/api/v1/admin/users/${user._id}/status`, { method: 'PATCH', json: { status } });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function setEmailVerified(user: AdminUser, emailVerified: boolean) {
+    setBusyId(user._id);
+    setError('');
+    try {
+      await apiFetch(`/api/v1/admin/users/${user._id}/email-verified`, {
+        method: 'PATCH',
+        json: { emailVerified },
+      });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
@@ -126,6 +145,18 @@ export default function AdminUsersPage() {
             </option>
           ))}
         </select>
+        <select
+          value={emailFilter}
+          onChange={(e) => {
+            setEmailFilter(e.target.value);
+            setPage(1);
+          }}
+          className="rounded-lg border border-white/10 bg-navy-deep px-3 py-2 text-sm text-bone outline-none focus:border-gold"
+        >
+          <option value="ALL">Email : tous</option>
+          <option value="true">Email vérifiés</option>
+          <option value="false">Email NON vérifiés</option>
+        </select>
         {data && (
           <span className="self-center font-mono text-xs text-bone/40">{data.total} utilisateur(s)</span>
         )}
@@ -142,6 +173,7 @@ export default function AdminUsersPage() {
               <thead className="bg-navy-mid text-left text-xs uppercase tracking-wide text-bone/50">
                 <tr>
                   <th className="px-4 py-3">Utilisateur</th>
+                  <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Rôles</th>
                   <th className="px-4 py-3">Statut</th>
                   <th className="px-4 py-3">Tx / Ventes</th>
@@ -152,7 +184,7 @@ export default function AdminUsersPage() {
               <tbody>
                 {data.users.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-bone/50">
+                    <td colSpan={7} className="px-4 py-6 text-center text-bone/50">
                       Aucun utilisateur trouvé.
                     </td>
                   </tr>
@@ -167,6 +199,7 @@ export default function AdminUsersPage() {
                       setEditingRolesId(editingRolesId === u._id ? null : u._id)
                     }
                     onSetStatus={(s) => setStatus(u, s)}
+                    onSetEmailVerified={(v) => setEmailVerified(u, v)}
                     onSaveRoles={(roles) => saveRoles(u, roles)}
                     onDelete={() => deleteUser(u)}
                   />
@@ -187,6 +220,7 @@ function UserRow({
   editingRoles,
   onToggleRoles,
   onSetStatus,
+  onSetEmailVerified,
   onSaveRoles,
   onDelete,
 }: {
@@ -195,6 +229,7 @@ function UserRow({
   editingRoles: boolean;
   onToggleRoles: () => void;
   onSetStatus: (s: string) => void;
+  onSetEmailVerified: (v: boolean) => void;
   onSaveRoles: (roles: string[]) => void;
   onDelete: () => void;
 }) {
@@ -215,6 +250,17 @@ function UserRow({
           </p>
           <p className="font-mono text-xs text-bone/40">{u.email}</p>
           <p className="font-mono text-xs text-bone/30">@{u.username}</p>
+        </td>
+        <td className="px-4 py-3">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              u.emailVerified
+                ? 'bg-mint/15 text-mint'
+                : 'bg-coral/15 text-coral'
+            }`}
+          >
+            {u.emailVerified ? 'Vérifié' : 'Non vérifié'}
+          </span>
         </td>
         <td className="px-4 py-3">
           <div className="flex flex-wrap gap-1">
@@ -283,6 +329,23 @@ function UserRow({
             >
               Rôles
             </button>
+            {u.emailVerified ? (
+              <button
+                disabled={busy}
+                onClick={() => onSetEmailVerified(false)}
+                className="rounded-full bg-coral/15 px-3 py-1 text-xs text-coral hover:bg-coral/25 disabled:opacity-50"
+              >
+                Retirer validation
+              </button>
+            ) : (
+              <button
+                disabled={busy}
+                onClick={() => onSetEmailVerified(true)}
+                className="rounded-full bg-mint/15 px-3 py-1 text-xs text-mint hover:bg-mint/25 disabled:opacity-50"
+              >
+                Valider l'email
+              </button>
+            )}
             {!isSuperAdmin && (
               <button
                 disabled={busy}
@@ -297,7 +360,7 @@ function UserRow({
       </tr>
       {editingRoles && (
         <tr className="border-t border-white/5 bg-navy-mid/40">
-          <td colSpan={6} className="px-4 py-3">
+          <td colSpan={7} className="px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               {ALL_ROLES.map((r) => {
                 const active = draftRoles.includes(r);

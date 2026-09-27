@@ -33,6 +33,35 @@ export default function RegisterPage() {
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  // Diagnostic de l'adresse saisi, demandé à l'API à la sortie du champ
+  // (et non à chaque frappe) : c'est le seul moment où le domaine est connu
+  // et où l'utilisateur n'attend pas encore de réponse.
+  const [emailHint, setEmailHint] = useState<{
+    suggestion: string | null;
+    deliverable: boolean | null;
+  }>({ suggestion: null, deliverable: null });
+
+  function update<K extends keyof typeof form>(key: K, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (key === 'email') {
+      setEmailHint({ suggestion: null, deliverable: null });
+    }
+  }
+
+  async function checkEmailField() {
+    const email = form.email.trim();
+    if (!email || !email.includes('@')) return;
+    try {
+      const res = await apiFetch<{
+        suggestion: string | null;
+        deliverable: boolean | null;
+      }>('/api/v1/auth/check-email', { method: 'POST', json: { email } });
+      setEmailHint({ suggestion: res.suggestion, deliverable: res.deliverable });
+    } catch {
+      // Diagnostic non bloquant : un échec ici ne doit pas empêcher
+      // l'inscription, le serveur refait le contrôle de toute façon.
+    }
+  }
 
   // Rediriger si déjà connecté
   useEffect(() => {
@@ -89,10 +118,6 @@ export default function RegisterPage() {
     }
   }
 
-  function update<K extends keyof typeof form>(key: K, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrors({});
@@ -118,9 +143,15 @@ export default function RegisterPage() {
       router.push('/verify-email');
       router.refresh();
     } catch (err) {
-      setErrors({
-        _form: err instanceof Error ? err.message : "Erreur lors de l'inscription",
-      });
+      const message = err instanceof Error ? err.message : "Erreur lors de l'inscription";
+      // Le refus de délivrabilité concerne l'email : on l'affiche sous le
+      // champ plutôt qu'en message global, sinon l'utilisateur ne sait pas
+      // quoi corriger.
+      if (message.includes('domaine ne peut pas')) {
+        setErrors({ email: message });
+      } else {
+        setErrors({ _form: message });
+      }
     } finally {
       setLoadingSubmit(false);
     }
@@ -205,9 +236,32 @@ export default function RegisterPage() {
               placeholder="Email"
               value={form.email}
               onChange={(e) => update('email', e.target.value)}
+              onBlur={checkEmailField}
               className={inputClass}
             />
-            {errors.email && <p className="mt-1 text-xs text-coral">{errors.email}</p>}
+            {errors.email ? (
+              <p className="mt-1 text-xs text-coral">{errors.email}</p>
+            ) : emailHint.deliverable === false ? (
+              <p className="mt-1 text-xs text-coral">
+                Ce domaine ne semble pas pouvoir recevoir d'email. Vérifiez
+                l'adresse saisie.
+              </p>
+            ) : emailHint.suggestion ? (
+              <p className="mt-1 text-xs text-gold">
+                Vous vouliez dire{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    update('email', emailHint.suggestion!);
+                    setEmailHint({ suggestion: null, deliverable: null });
+                  }}
+                  className="underline hover:text-gold-soft"
+                >
+                  {emailHint.suggestion}
+                </button>{' '}
+                ?
+              </p>
+            ) : null}
           </div>
 
           <div>

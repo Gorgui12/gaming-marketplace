@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../../middlewares/auth.middleware.js';
+import { requireAuth, requireEmailVerified } from '../../middlewares/auth.middleware.js';
 import { requireRole } from '../../middlewares/rbac.middleware.js';
 import { UserRole } from '@gm/types';
 import {
@@ -18,7 +18,12 @@ import {
 export const transactionsRouter = Router();
 
 transactionsRouter.use(requireAuth);
-transactionsRouter.post('/', createTransaction);
+// Seule l'OUVERTURE d'une transaction est bloquée sans email confirmé : c'est
+// le moment où des fonds entrent en séquestre. Les étapes suivantes
+// (livraison, confirmation, vérif paiement) restent ouvertes, sinon un compte
+// créé avant la mise en place de la validation resterait coincé avec de
+// l'argent bloqué chez nous — un dommage réel pour l'acheteur légitime.
+transactionsRouter.post('/', requireEmailVerified, createTransaction);
 transactionsRouter.get('/mine', listMyTransactions);
 transactionsRouter.get('/:id', getTransaction);
 transactionsRouter.get('/:id/access', getTransactionAccess);

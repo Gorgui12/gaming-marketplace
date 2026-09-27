@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { sendMessageSchema } from '@gm/validation';
 import { asyncHandler } from '../../lib/async-handler.js';
-import { requireAuth } from '../../middlewares/auth.middleware.js';
+import { requireAuth, requireEmailVerified } from '../../middlewares/auth.middleware.js';
 import { MessagingService } from './messaging.service.js';
 
 export const messagingRouter = Router();
@@ -17,8 +17,11 @@ messagingRouter.get(
   }),
 );
 
+// Lire l'historique reste possible (l'échange peut être en cours), mais
+// contacter la contrepartie engage la responsabilité de l'expéditeur.
 messagingRouter.post(
   '/:transactionId/messages',
+  requireEmailVerified,
   asyncHandler(async (req: Request, res: Response) => {
     const input = sendMessageSchema.parse(req.body);
     const message = await MessagingService.sendMessage({

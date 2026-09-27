@@ -6,6 +6,12 @@ import { apiFetch } from './api-client';
 interface CurrentUser {
   id: string;
   roles: string[];
+  /**
+   * Lu via /auth/me. Sert à afficher un rappel tant que l'email n'est pas
+   * confirmé — l'API reste la seule autorité (c'est `requireEmailVerified`
+   * qui bloque), ce n'est qu'un signal d'interface.
+   */
+  emailVerified: boolean;
 }
 
 // Événement global : permet à toutes les instances montées de useCurrentUser

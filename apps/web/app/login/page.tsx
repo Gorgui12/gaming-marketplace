@@ -67,6 +67,8 @@ export default function LoginPage() {
         json: { idToken: response.credential },
       });
       notifyAuthChanged();
+      // Google atteste déjà la possession de la boîte : l'API marque ces
+      // comptes comme vérifiés, on suit donc toujours /marketplace.
       router.push('/marketplace');
       router.refresh();
     } catch (err) {
@@ -81,8 +83,18 @@ export default function LoginPage() {
     setSubmitting(true);
     setError('');
     try {
-      await apiFetch('/api/v1/auth/login', { method: 'POST', json: { email, password } });
+      const res = await apiFetch<{ emailVerified: boolean }>('/api/v1/auth/login', {
+        method: 'POST',
+        json: { email, password },
+      });
       notifyAuthChanged();
+      // Un compte non vérifié se connecte, mais ne peut pas acheter, vendre
+      // ni envoyer de message. On l'emmène directement à l'action qui débloque
+      // la situation plutôt que de le laisser découvrir le blocage plus tard.
+      if (!res.emailVerified) {
+        router.push('/verify-email');
+        return;
+      }
       router.push('/marketplace');
       router.refresh();
     } catch (err) {

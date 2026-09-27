@@ -9,6 +9,11 @@ export const ErrorCode = {
 
   USER_ALREADY_EXISTS: 'USER_ALREADY_EXISTS',
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  // Email non confirmé : le compte existe et peut se connecter/naviguer, mais
+  // les actions sensibles (vendre, acheter, message, avis) sont refusées.
+  EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
+  // Domaine incapable de recevoir du mail (NXDOMAIN, ou aucun MX ni A/AAAA).
+  EMAIL_NOT_DELIVERABLE: 'EMAIL_NOT_DELIVERABLE',
 
   LISTING_NOT_FOUND: 'LISTING_NOT_FOUND',
   LISTING_NOT_PUBLISHABLE: 'LISTING_NOT_PUBLISHABLE',

@@ -6,8 +6,12 @@ import {
   resetPasswordSchema,
   googleAuthSchema,
   verifyEmailSchema,
+  resendVerificationSchema,
+  checkEmailSchema,
+  analyseEmail,
 } from '@gm/validation';
 import { asyncHandler } from '../../lib/async-handler.js';
+import { checkEmailDomain } from '../../lib/email/email-deliverability.js';
 import { AuthService } from './auth.service.js';
 import { createSessionToken } from './session.js';
 import { env } from '../../config/env.js';
@@ -50,7 +54,16 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   setSessionCookie(res, token);
   res.status(201).json({
     success: true,
-    data: { id: user._id, email: user.email, username: user.username },
+    // `emailVerified` est renvoyé explicitement : le front doit savoir dès
+    // la réponse d'inscription qu'il a encore une action à faire. Le cookie de
+    // session est bien émis (navigation libre), mais les actions engageantes
+    // restent bloquées tant que l'email n'est pas confirmé.
+    data: {
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      emailVerified: user.emailVerified === true,
+    },
   });
 });
 
@@ -61,7 +74,12 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   setSessionCookie(res, token);
   res.status(200).json({
     success: true,
-    data: { id: user._id, email: user.email, username: user.username },
+    data: {
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      emailVerified: user.emailVerified === true,
+    },
   });
 });
 
@@ -92,7 +110,12 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
   setSessionCookie(res, token);
   res.status(200).json({
     success: true,
-    data: { id: user._id, email: user.email, username: user.username },
+    data: {
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      emailVerified: user.emailVerified === true,
+    },
   });
 });
 
@@ -103,7 +126,12 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response) => {
   setSessionCookie(res, token);
   res.status(200).json({
     success: true,
-    data: { id: user._id, email: user.email, username: user.username },
+    data: {
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      emailVerified: user.emailVerified === true,
+    },
   });
 });
 
@@ -117,5 +145,39 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
       emailVerified: user.emailVerified,
       message: 'Votre email a été confirmé. Merci !',
     },
+  });
+});
+
+export const resendVerification = asyncHandler(async (req: Request, res: Response) => {
+  const input = resendVerificationSchema.parse(req.body);
+  // `attachUser` est monté globalement : la session suffit à identifier le
+  // compte quand elle existe, sans avoir à exposer l'email côté client.
+  await AuthService.resendVerification(input, req.user?.id);
+  // Message volontairement générique : ni l'existence du compte, ni son état
+  // de validation ne doivent être déductibles de la réponse.
+  res.status(200).json({
+    success: true,
+    data: {
+      message:
+        "Si un compte non confirmé correspond à cette adresse, un nouveau lien vient d'être envoyé.",
+    },
+  });
+});
+
+export const checkEmail = asyncHandler(async (req: Request, res: Response) => {
+  const input = checkEmailSchema.parse(req.body);
+  const { problem, suggestion } = analyseEmail(input.email);
+
+  // La délivrabilité réelle n'est demandée que si l'adresse est bien formée :
+  // inutile d'aller interroger le DNS pour un domaine déjà refusé.
+  let deliverable: boolean | null = null;
+  if (!problem) {
+    const domain = input.email.slice(input.email.lastIndexOf('@') + 1);
+    deliverable = (await checkEmailDomain(domain)) !== 'undeliverable';
+  }
+
+  res.status(200).json({
+    success: true,
+    data: { problem, suggestion, deliverable },
   });
 });

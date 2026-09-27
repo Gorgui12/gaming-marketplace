@@ -4,16 +4,19 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
-import { notifyAuthChanged } from '@/lib/use-current-user';
+import { notifyAuthChanged, useCurrentUser } from '@/lib/use-current-user';
 import { SiteNav } from '@/components/site-nav';
 
 function VerifyEmailView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
+  const { user, loading } = useCurrentUser();
 
   const [status, setStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [resendMessage, setResendMessage] = useState('');
 
   useEffect(() => {
     if (!token || status !== 'idle') return;
@@ -32,6 +35,35 @@ function VerifyEmailView() {
       });
   }, [token, status]);
 
+  /**
+   * Demande un nouveau lien. Aucun email n'est envoyé depuis le navigateur :
+   * si une session est ouverte, l'API identifie le compte tout seul. Le
+   * délai d'une minute et la limite de 3 tentatives par quart d'heure sont
+   * gérés côté serveur.
+   */
+  async function handleResend() {
+    setResendState('sending');
+    setResendMessage('');
+    try {
+      const res = await apiFetch<{ message: string }>('/api/v1/auth/resend-verification', {
+        method: 'POST',
+        json: {},
+      });
+      setResendState('sent');
+      setResendMessage(res.message);
+    } catch (err) {
+      setResendState('error');
+      setResendMessage(err instanceof Error ? err.message : "Le renvoi a échoué.");
+    }
+  }
+
+  // Déjà confirmé : plus rien à faire ici.
+  useEffect(() => {
+    if (!loading && user?.emailVerified) {
+      router.replace('/marketplace');
+    }
+  }, [loading, user, router]);
+
   // Pas de token : l'utilisateur vient de s'inscrire, on l'invite à
   // vérifier sa boîte mail (et surtout ses courriers indésirables).
   if (!token) {
@@ -48,22 +80,55 @@ function VerifyEmailView() {
               bouton <strong className="text-bone">« Confirmer mon email »</strong> de ce
               message pour activer votre compte.
             </p>
-            <div className="mt-6 rounded-xl bg-navy-deep p-4">
+            <div className="mt-4 rounded-xl border border-gold/20 bg-gold/5 p-4">
+              <p className="text-sm font-semibold text-gold">
+               Sans confirmation, votre compte est limité
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-bone/70">
+                Vous pouvez parcourir la marketplace, mais vous ne pourrez pas{' '}
+                <strong className="text-bone">publier une annonce</strong>,{' '}
+                <strong className="text-bone">acheter</strong>,{' '}
+                <strong className="text-bone">contacter un vendeur</strong> ni{' '}
+                <strong className="text-bone">déposer un avis</strong> tant que
+                l'adresse n'est pas confirmée.
+              </p>
+            </div>
+            <div className="mt-4 rounded-xl bg-navy-deep p-4">
               <p className="text-sm font-semibold text-gold">
                 Vous ne trouvez pas l'email ?
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-bone/70">
-                <li>Vérifiez le dossier <strong className="text-bone">courrier indésirable / spam</strong>.</li>
+                <li>Vérifiez le dossier <strong className="text-bone">courrier indésirable / spam</strong>, et l'onglet <strong className="text-bone">Promotions</strong> sur Gmail.</li>
                 <li>
-                  Sur iPhone (Mail / iCloud) et Gmail, cet email peut arriver en
-                  spam ou dans les onglets <strong className="text-bone">Promotions</strong>{' '}
-                  / <strong className="text-bone">Mises à jour</strong>.
+                  Ajoutez <strong className="text-bone">support@gamingmarket.store</strong>{' '}
+                  à vos contacts : vos emails suivants arriveront alors
+                  directement dans votre boîte de réception.
                 </li>
-                <li>Marquez notre email comme <strong className="text-bone">non indésirable</strong> pour ne rien rater.</li>
                 <li>Le lien de confirmation expire dans 24 heures.</li>
               </ul>
             </div>
-            <div className="mt-8 flex flex-col gap-3">
+            <div className="mt-6">
+              <button
+                onClick={handleResend}
+                disabled={resendState === 'sending' || resendState === 'sent'}
+                className="w-full rounded-full border border-gold/40 px-6 py-2.5 text-sm font-semibold text-gold hover:border-gold/70 disabled:opacity-50"
+              >
+                {resendState === 'sending' && 'Envoi en cours…'}
+                {resendState === 'sent' && 'Lien renvoyé'}
+                {(resendState === 'idle' || resendState === 'error') &&
+                  "Renvoyer le lien de confirmation"}
+              </button>
+              {resendMessage && (
+                <p
+                  className={`mt-2 text-center text-xs ${
+                    resendState === 'error' ? 'text-coral' : 'text-bone/50'
+                  }`}
+                >
+                  {resendMessage}
+                </p>
+              )}
+            </div>
+            <div className="mt-6 flex flex-col gap-3">
               <Link
                 href="/marketplace"
                 className="w-full rounded-full bg-gold px-6 py-2.5 text-center text-sm font-semibold text-navy-deep hover:bg-gold-soft"
@@ -123,12 +188,35 @@ function VerifyEmailView() {
               </h1>
               <p className="mt-4 text-sm leading-relaxed text-coral">{message}</p>
               <p className="mt-2 text-sm text-bone/50">
-                Ce lien a peut-être expiré (24 h). Contactez le support à
-                support@gamingmarket.store pour recevoir un nouveau lien.
+                Ce lien a peut-être expiré (24 h) ou déjà été utilisé.
               </p>
+              <button
+                onClick={handleResend}
+                disabled={resendState === 'sending' || resendState === 'sent'}
+                className="mt-6 w-full rounded-full border border-gold/40 px-6 py-2.5 text-sm font-semibold text-gold hover:border-gold/70 disabled:opacity-50"
+              >
+                {resendState === 'sending' && 'Envoi en cours…'}
+                {resendState === 'sent' && 'Lien renvoyé'}
+                {(resendState === 'idle' || resendState === 'error') &&
+                  'Recevoir un nouveau lien'}
+              </button>
+              {resendMessage && (
+                <p
+                  className={`mt-2 text-center text-xs ${
+                    resendState === 'error' ? 'text-coral' : 'text-bone/50'
+                  }`}
+                >
+                  {resendMessage}
+                </p>
+              )}
+              {resendState !== 'sent' && (
+                <p className="mt-4 text-center text-xs text-bone/50">
+                  Toujours rien ? Écrivez-nous à support@gamingmarket.store.
+                </p>
+              )}
               <Link
                 href="/marketplace"
-                className="mt-6 block w-full rounded-full bg-gold px-6 py-2.5 text-center text-sm font-semibold text-navy-deep hover:bg-gold-soft"
+                className="mt-4 block w-full rounded-full bg-gold px-6 py-2.5 text-center text-sm font-semibold text-navy-deep hover:bg-gold-soft"
               >
                 Retour à la marketplace
               </Link>

@@ -1,5 +1,5 @@
 import { Router, raw } from 'express';
-import { requireAuth } from '../../middlewares/auth.middleware.js';
+import { requireAuth, requireEmailVerified } from '../../middlewares/auth.middleware.js';
 import { uploadImage } from './uploads.controller.js';
 
 export const uploadsRouter = Router();
@@ -13,6 +13,7 @@ export const uploadsRouter = Router();
 uploadsRouter.post(
   '/image',
   requireAuth,
+  requireEmailVerified,
   raw({
     type: ['application/octet-stream', 'image/jpeg', 'image/png', 'image/webp'],
     limit: '6mb',
