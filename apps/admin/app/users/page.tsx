@@ -24,7 +24,6 @@ interface AdminUser {
 
 const STATUS_OPTIONS = ['ACTIVE', 'SUSPENDED', 'BANNED'] as const;
 const ALL_ROLES = ['USER', 'SELLER', 'MODERATOR', 'SUPPORT', 'ADMIN', 'SUPER_ADMIN'] as const;
-const PAGE_SIZE = 20;
 
 export default function AdminUsersPage() {
   const [data, setData] = useState<{
@@ -43,7 +42,7 @@ export default function AdminUsersPage() {
 
   const load = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) });
+      const params = new URLSearchParams({ page: String(page), pageSize: '20' });
       if (search.trim()) params.set('search', search.trim());
       if (statusFilter !== 'ALL') params.set('status', statusFilter);
       if (emailFilter !== 'ALL') params.set('emailVerified', emailFilter);
@@ -173,7 +172,6 @@ export default function AdminUsersPage() {
             <table className="w-full text-sm">
               <thead className="bg-navy-mid text-left text-xs uppercase tracking-wide text-bone/50">
                 <tr>
-                  <th className="w-12 px-4 py-3">N°</th>
                   <th className="px-4 py-3">Utilisateur</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Rôles</th>
@@ -186,16 +184,15 @@ export default function AdminUsersPage() {
               <tbody>
                 {data.users.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-bone/50">
+                    <td colSpan={7} className="px-4 py-6 text-center text-bone/50">
                       Aucun utilisateur trouvé.
                     </td>
                   </tr>
                 )}
-                {data.users.map((u, i) => (
+                {data.users.map((u) => (
                   <UserRow
                     key={u._id}
                     user={u}
-                    rowNumber={(data.page - 1) * PAGE_SIZE + i + 1}
                     busy={busyId === u._id}
                     editingRoles={editingRolesId === u._id}
                     onToggleRoles={() =>
@@ -219,7 +216,6 @@ export default function AdminUsersPage() {
 
 function UserRow({
   user: u,
-  rowNumber,
   busy,
   editingRoles,
   onToggleRoles,
@@ -229,7 +225,6 @@ function UserRow({
   onDelete,
 }: {
   user: AdminUser;
-  rowNumber: number;
   busy: boolean;
   editingRoles: boolean;
   onToggleRoles: () => void;
@@ -249,7 +244,6 @@ function UserRow({
   return (
     <>
       <tr className="border-t border-white/5">
-        <td className="px-4 py-3 font-mono text-xs text-bone/40">{rowNumber}</td>
         <td className="px-4 py-3">
           <p className="text-bone">
             {u.firstName} {u.lastName}
@@ -366,7 +360,7 @@ function UserRow({
       </tr>
       {editingRoles && (
         <tr className="border-t border-white/5 bg-navy-mid/40">
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={7} className="px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               {ALL_ROLES.map((r) => {
                 const active = draftRoles.includes(r);
