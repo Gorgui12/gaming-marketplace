@@ -16,8 +16,9 @@ import { logger } from '../../lib/logger.js';
  *   est en ESCROW_ACTIVE ou SELLER_DELIVERED — jamais avant paiement confirmé.
  * - Le payload en clair ne transite jamais par un log (voir logger.ts,
  *   redaction sur credentialsPayload).
- * - invalidate() est appelé après COMPLETED ou REFUNDED pour empêcher toute
- *   relecture ultérieure.
+ * - invalidateForTransaction() est appelé dès que la transaction part en
+ *   REFUNDED, pour couper toute relecture des identifiants par un acheteur
+ *   qui n'a plus le droit de les conserver.
  */
 export class SecureAccountAccessService {
   static async storeCredentials(input: {
@@ -85,11 +86,18 @@ export class SecureAccountAccessService {
     return { plaintext };
   }
 
-    /**
+  /**
    * Lecture à la demande par l'acheteur — ne stocke jamais le clair, on
    * redéchiffre à chaque appel depuis SecureAccountCredentialModel. Exige
-   * que la libération ait déjà eu lieu (accessStatus RELEASED) et que
-   * l'appelant soit bien l'acheteur de la transaction concernée.
+   * que la libération ait déjà eu lieu (accessStatus RELEASED) ET que la
+   * transaction ne soit pas dans un état qui retire le droit à l'acheteur.
+   *
+   * Le contrôle de l'état de la transaction est indispensable, et pas une
+   * redondance avec `accessStatus` : après un remboursement de litige, la
+   * transaction part en REFUNDED alors que l'accès avait déjà été libéré et
+   * reste marqué RELEASED en base. Sans ce garde-fou, l'acheteur relisait
+   * indéfiniment les identifiants d'un compte pour lequel il vient d'être
+   * remboursé.
    */
   static async getForBuyer(input: {
     transactionId: string;
@@ -107,6 +115,21 @@ export class SecureAccountAccessService {
         ErrorCode.ACCESS_NOT_YET_RELEASABLE,
         "Le vendeur n'a pas encore livré les accès",
         409,
+      );
+    }
+    // États qui retirent le droit de conservation des accès à l'acheteur.
+    const accessRevokedStates: string[] = [
+      TransactionState.REFUNDED,
+      TransactionState.REFUND_PENDING,
+      TransactionState.DISPUTED,
+      TransactionState.CANCELLED,
+    ];
+    if (accessRevokedStates.includes(transaction.escrowStatus as string)) {
+      throw new AppError(
+        ErrorCode.FORBIDDEN,
+        "Les accès de cette transaction ne sont plus consultables (transaction " +
+          `${transaction.escrowStatus.toLowerCase()})`,
+        410,
       );
     }
 
@@ -133,5 +156,23 @@ export class SecureAccountAccessService {
     await SecureAccountCredentialModel.findByIdAndUpdate(credentialId, {
       invalidatedAt: new Date(),
     });
+  }
+
+  /**
+   * Coupe l'accès aux identifiants d'une transaction
+   * (remboursement, annulation). Idempotent, et sans effet si les accès n'ont
+   * jamais été libérés — ce qui est le cas d'un remboursement avant livraison.
+   */
+  static async invalidateForTransaction(transactionId: string): Promise<void> {
+    const result = await SecureAccountCredentialModel.updateMany(
+      { releasedToTransaction: transactionId, invalidatedAt: null },
+      { invalidatedAt: new Date() },
+    );
+    if (result.modifiedCount > 0) {
+      logger.info(
+        { transactionId, count: result.modifiedCount },
+        'Accès invalidés après remboursement',
+      );
+    }
   }
 }

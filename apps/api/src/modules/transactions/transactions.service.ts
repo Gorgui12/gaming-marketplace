@@ -24,6 +24,7 @@ import { PromoCodeService } from '../affiliates/promo-code.service.js';
 import { EmailService } from '../../lib/email/email.service.js';
 import { UserModel } from '../users/user.model.js';
 import { NotificationService } from '../notifications/notification.service.js';
+import { DisputesService } from '../disputes/disputes.service.js';
 
 function requireParticipant(
   transaction: { buyer: unknown; seller: unknown },
@@ -354,6 +355,18 @@ export class TransactionsService {
   /**
    * Action admin: transaction en litige -> remboursement acheteur.
    * Inverse systématiquement toute commission affiliée associée (§12/§31).
+   *
+   * Cette méthode est le point de passage UNIQUE de l'argent sortant : elle
+   * est appelée aussi bien depuis la résolution d'un litige que depuis la page
+   * Transactions de l'admin. C'est pourquoi elle porte elle-même les effets
+   * invariants du remboursement — invalidation des accès et clôture du litige
+   * éventuel — et non le contrôleur qui l'appelle. Avant cette centralisation,
+   * un remboursement déclenché hors du module litiges laissait
+   * `disputeStatus: 'open'` et un document Dispute en OPEN alors que la
+   * transaction partait en REFUNDED : litige non résolvable ensuite (la
+   * transition DISPUTED -> * était déjà consommée) et KPI « litiges ouverts »
+   * faussé.
+   *
    * Note Phase 5: le remboursement réel (transfert effectif vers
    * l'acheteur) est une action opérationnelle distincte à déclencher en
    * parallèle — non automatisée ici. PayDunya ne documente pas de
@@ -361,7 +374,13 @@ export class TransactionsService {
    * Mobile Money — à vérifier avec leur support technique
    * (tech@paydunya.com) avant d'automatiser, voir docs/PAYMENTS.md.
    */
-  static async adminRefund(input: { transactionId: string; adminId: string; reason: string }) {
+  static async adminRefund(input: {
+    transactionId: string;
+    adminId: string;
+    reason: string;
+    /** Libellé de décision transmis au litige quand l'appel vient de sa résolution. */
+    disputeResolution?: string;
+  }) {
     const transaction = await TransactionModel.findById(input.transactionId);
     if (!transaction) {
       throw AppError.notFound(ErrorCode.TRANSACTION_NOT_FOUND, 'Transaction introuvable');
@@ -393,9 +412,24 @@ export class TransactionsService {
       actor: input.adminId,
     });
     transaction.escrowStatus = TransactionState.REFUNDED;
-    await transaction.save();
+    transaction.disputeStatus = transaction.disputeStatus === 'open' ? 'resolved' : transaction.disputeStatus;
 
     await AffiliateCommissionService.reverseForTransaction(String(transaction._id));
+
+    // L'acheteur est remboursé : il n'a plus le droit de garder le compte.
+    // On invalide les identifiants AVANT de le prévenir, pour qu'aucune requête
+    // concurrente ne puisse encore les lire entre les deux.
+    //
+    // `accessStatus` n'est basculé que s'il valait RELEASED : sinon on effacerait
+    // l'information « le vendeur n'a jamais livré », qui est exactement ce que
+    // l'admin doit voir pour juger un litige. Un remboursement avant livraison
+    // laisse donc la trace à NOT_RELEASED.
+    if (transaction.accessStatus === AccessStatus.RELEASED) {
+      await SecureAccountAccessService.invalidateForTransaction(String(transaction._id));
+      transaction.accessStatus = AccessStatus.INVALIDATED;
+    }
+
+    await transaction.save();
 
     await AuditService.log({
       actor: input.adminId,
@@ -403,6 +437,16 @@ export class TransactionsService {
       entityType: 'Transaction',
       entityId: String(transaction._id),
       metadata: { reason: input.reason },
+    });
+
+    // Clôture du litige associé, s'il y en a un. Silencieux sinon : un
+    // remboursement admin direct (transaction bloquée sans litige) reste un
+    // flux légitime.
+    await DisputesService.closeForTransaction({
+      transactionId: String(transaction._id),
+      outcome: 'BUYER',
+      resolution: input.disputeResolution ?? input.reason,
+      adminId: input.adminId,
     });
 
     // Notification email acheteur
@@ -435,11 +479,16 @@ export class TransactionsService {
    * approuve les commissions affiliées associées et marque l'annonce SOLD.
    * Le transfert Mobile Money réel reste une action opérationnelle distincte
    * (même logique que adminRefund, voir docs/PAYMENTS.md).
+   *
+   * Contrairement à adminRefund, les accès NE sont PAS invalidés : la vente
+   * est validée, l'acheteur a payé et garde légitimement son compte.
    */
   static async adminReleaseToSeller(input: {
     transactionId: string;
     adminId: string;
     reason: string;
+    /** Libellé de décision transmis au litige quand l'appel vient de sa résolution. */
+    disputeResolution?: string;
   }) {
     const transaction = await TransactionModel.findById(input.transactionId);
     if (!transaction) {
@@ -472,6 +521,8 @@ export class TransactionsService {
       actor: input.adminId,
     });
     transaction.escrowStatus = TransactionState.COMPLETED;
+    transaction.disputeStatus =
+      transaction.disputeStatus === 'open' ? 'resolved' : transaction.disputeStatus;
     await transaction.save();
 
     await ListingModel.findByIdAndUpdate(transaction.listing, { status: ListingStatus.SOLD });
@@ -484,6 +535,14 @@ export class TransactionsService {
       entityType: 'Transaction',
       entityId: String(transaction._id),
       metadata: { reason: input.reason },
+    });
+
+    // Clôture du litige associé, s'il y en a un (voir adminRefund).
+    await DisputesService.closeForTransaction({
+      transactionId: String(transaction._id),
+      outcome: 'SELLER',
+      resolution: input.disputeResolution ?? input.reason,
+      adminId: input.adminId,
     });
 
     // Notification email vendeur

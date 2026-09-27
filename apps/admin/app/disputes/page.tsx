@@ -13,10 +13,18 @@ interface PopulatedTransaction {
   paymentReference: string;
 }
 
+interface PopulatedUser {
+  _id: string;
+  email: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface AdminDispute {
   _id: string;
   transaction: PopulatedTransaction | string;
-  openedBy: string;
+  openedBy: PopulatedUser | string;
   reason: string;
   description: string;
   status: string;
@@ -27,6 +35,7 @@ interface AdminDispute {
 const fmt = new Intl.NumberFormat('fr-FR');
 
 const STATUS_FILTERS = [
+  'ALL',
   'OPEN',
   'UNDER_REVIEW',
   'WAITING_FOR_BUYER',
@@ -35,6 +44,26 @@ const STATUS_FILTERS = [
   'RESOLVED_SELLER',
   'CLOSED',
 ];
+
+const STATUS_LABEL: Record<string, string> = {
+  ALL: 'Tous',
+  OPEN: 'Ouverts',
+  UNDER_REVIEW: 'En cours d\'examen',
+  WAITING_FOR_BUYER: 'En attente de l\'acheteur',
+  WAITING_FOR_SELLER: 'En attente du vendeur',
+  RESOLVED_BUYER: 'Résolus acheteur',
+  RESOLVED_SELLER: 'Résolus vendeur',
+  CLOSED: 'Clos',
+};
+
+const REASON_LABEL: Record<string, string> = {
+  ACCESS_INCORRECT: 'Accès incorrects',
+  ACCOUNT_MISMATCH: 'Compte non conforme',
+  SELLER_UNRESPONSIVE: 'Vendeur injoignable',
+  ACCOUNT_INACCESSIBLE: 'Compte inaccessible',
+  MAJOR_ISSUE: 'Problème majeur',
+  OTHER: 'Autre',
+};
 
 export default function AdminDisputesPage() {
   const [data, setData] = useState<{
@@ -98,6 +127,10 @@ export default function AdminDisputesPage() {
     return typeof d.transaction === 'string' ? null : d.transaction;
   }
 
+  function opener(d: AdminDispute): PopulatedUser | null {
+    return typeof d.openedBy === 'string' ? null : d.openedBy;
+  }
+
   return (
     <AdminShell title="Litiges">
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -111,7 +144,7 @@ export default function AdminDisputesPage() {
         >
           {STATUS_FILTERS.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {STATUS_LABEL[s] ?? s}
             </option>
           ))}
         </select>
@@ -129,6 +162,7 @@ export default function AdminDisputesPage() {
           <div className="space-y-3">
             {data.disputes.map((d) => {
               const t = tx(d);
+              const o = opener(d);
               const open = ['OPEN', 'UNDER_REVIEW', 'WAITING_FOR_BUYER', 'WAITING_FOR_SELLER'].includes(d.status);
               return (
                 <div key={d._id} className="rounded-ticket border border-white/10 bg-navy-mid p-4">
@@ -140,7 +174,26 @@ export default function AdminDisputesPage() {
                           ouvert le {new Date(d.createdAt).toLocaleDateString('fr-FR')}
                         </span>
                       </div>
-                      <p className="mt-2 font-display text-base text-bone">{d.reason}</p>
+                      <p className="mt-2 font-display text-base text-bone">
+                        {REASON_LABEL[d.reason] ?? d.reason}
+                      </p>
+                      <p className="mt-1 font-mono text-[10px] text-bone/30">
+                        motif brut : {d.reason}
+                      </p>
+                      {o && (
+                        <p className="mt-1 text-xs text-bone/50">
+                          Ouvert par{' '}
+                          <span className="text-bone/70">
+                            {o.firstName} {o.lastName}
+                          </span>{' '}
+                          <span className="font-mono text-bone/40">({o.email})</span>
+                        </p>
+                      )}
+                      {!o && (
+                        <p className="mt-1 font-mono text-[10px] text-coral/60">
+                          ouvrant inconnu : {String(d.openedBy)}
+                        </p>
+                      )}
                       <p className="mt-1 max-w-2xl whitespace-pre-wrap text-sm text-bone/60">{d.description}</p>
                       {t && (
                         <p className="mt-2 font-mono text-xs text-bone/50">

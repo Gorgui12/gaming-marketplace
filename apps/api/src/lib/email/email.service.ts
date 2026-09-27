@@ -274,10 +274,22 @@ export class EmailService {
     await this.send(params.to, subject, html, 'account-banned');
   }
 
+  static async sendDisputeOpened(params: {
+    to: string;
+    firstName: string;
+    role: 'buyer' | 'seller';
+    transactionId: string;
+    reason: string;
+  }) {
+    const { subject, html } = emailTemplates.disputeOpened(params);
+    await this.send(params.to, subject, html, 'dispute-opened');
+  }
+
   static async sendDisputeResolved(params: {
     to: string;
     firstName: string;
     role: 'buyer' | 'seller';
+    outcome: 'BUYER' | 'SELLER';
     transactionId: string;
     resolution: string;
   }) {

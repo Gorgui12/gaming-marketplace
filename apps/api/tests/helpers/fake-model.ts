@@ -92,6 +92,7 @@ function attachInstanceMethods<T extends Doc>(doc: T, store: Map<string, Doc>): 
 interface SingleQueryChain<T> extends Promise<T | null> {
   select(fields: string): SingleQueryChain<T>;
   sort(spec: Record<string, 1 | -1>): SingleQueryChain<T>;
+  populate(path: string, fields?: string): SingleQueryChain<T>;
   lean(): SingleQueryChain<T>;
 }
 
@@ -105,6 +106,12 @@ function makeSingleQueryChain<T extends Doc>(
     },
     sort(spec: Record<string, 1 | -1>) {
       sortSpec = spec;
+      return chain;
+    },
+    // `populate()` est un no-op côté fake : le store ne contient pas de
+    // collections liées à résoudre. Présent pour que le code testé puisse
+    // chaîner .populate().lean() comme en Mongoose.
+    populate() {
       return chain;
     },
     // `lean()` est un no-op côté fake : présent pour que le code testé puisse
@@ -126,6 +133,7 @@ interface QueryChain<T> extends Promise<T[]> {
   skip(n: number): QueryChain<T>;
   limit(n: number): QueryChain<T>;
   select(fields: string): QueryChain<T>;
+  populate(path: string, fields?: string): QueryChain<T>;
   lean(): QueryChain<T>;
 }
 
@@ -152,6 +160,10 @@ function makeQueryChain<T extends Doc>(items: T[]): QueryChain<T> {
       return chain;
     },
     select() {
+      return chain;
+    },
+    // No-op : voir makeSingleQueryChain.
+    populate() {
       return chain;
     },
     lean() {

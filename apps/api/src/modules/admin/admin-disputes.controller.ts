@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import { Types } from 'mongoose';
 import { z } from 'zod';
 import { DisputeStatus, TransactionState } from '@gm/types';
 import { asyncHandler } from '../../lib/async-handler.js';
@@ -7,7 +6,6 @@ import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { assertTransition } from '../transactions/transaction-state-machine.js';
 import { TransactionsService } from '../transactions/transactions.service.js';
-import { AuditService } from '../audit/audit.service.js';
 import { DisputeModel, TransactionModel } from './admin-stats.models.js';
 
 const OPEN_DISPUTE_STATUSES: string[] = [
@@ -20,9 +18,16 @@ const OPEN_DISPUTE_STATUSES: string[] = [
 export const listAdminDisputes = asyncHandler(async (req: Request, res: Response) => {
   const query = z
     .object({
+      // `ALL` doit être accepté explicitement par le schéma : il ne fait pas
+      // partie de l'enum DisputeStatus, et un z.enum le rejetait en 400. Le
+      // filtre « tous les litiges » — celui dont l'admin a besoin pour voir
+      // l'historique complet — était donc inaccessible depuis l'UI.
       status: z
-        .enum(Object.values(DisputeStatus) as [string, ...string[]])
-        .default('OPEN'),
+        .union([
+          z.literal('ALL'),
+          z.enum(Object.values(DisputeStatus) as [string, ...string[]]),
+        ])
+        .default(DisputeStatus.OPEN),
       page: z.coerce.number().int().positive().default(1),
       pageSize: z.coerce.number().int().positive().max(50).default(20),
     })
@@ -36,7 +41,12 @@ export const listAdminDisputes = asyncHandler(async (req: Request, res: Response
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(query.pageSize)
-      .populate('transaction', 'amount currency escrowStatus paymentReference'),
+      .populate('transaction', 'amount currency escrowStatus paymentReference buyer seller')
+      // Sans ce populate, l'admin ne voit qu'un ObjectId en hexa comme
+      // « openedBy » et ne peut pas identifier qui a ouvert le litige —
+      // le champ dont il a justement besoin pour trancher.
+      .populate('openedBy', 'email username firstName lastName')
+      .populate('assignedAdmin', 'email username'),
     DisputeModel.countDocuments(filter),
   ]);
 
@@ -83,43 +93,35 @@ export const resolveAdminDispute = asyncHandler(async (req: Request, res: Respon
     input.outcome === 'BUYER' ? TransactionState.REFUND_PENDING : TransactionState.SELLER_PAYOUT_PENDING;
   assertTransition(transaction.escrowStatus as TransactionState, targetState, 'ADMIN');
 
+  // La clôture du document Dispute n'est PAS faite ici : elle est portée par
+  // TransactionsService, seul chemin vers l'argent. Ainsi, un remboursement
+  // déclenché depuis la page Transactions (hors litige) solde aussi le litige,
+  // au lieu de laisser transaction.disputeStatus = 'open' avec un litige
+  // définitivement introuvable et un KPI faux positif.
   if (input.outcome === 'BUYER') {
-    // Rembourse l'acheteur (REFUND_PENDING -> REFUNDED) + reverse les
-    // commissions affiliées — logique centralisée dans TransactionsService.
     await TransactionsService.adminRefund({
       transactionId: String(transaction._id),
       adminId: req.user!.id,
       reason: `Litige ${String(dispute._id)}: ${input.resolution}`,
+      disputeResolution: input.resolution,
     });
   } else {
-    // Tranche en faveur du vendeur (-> COMPLETED) + approuve les commissions.
     await TransactionsService.adminReleaseToSeller({
       transactionId: String(transaction._id),
       adminId: req.user!.id,
       reason: `Litige ${String(dispute._id)}: ${input.resolution}`,
+      disputeResolution: input.resolution,
     });
   }
 
-  transaction.disputeStatus = 'resolved';
-  await transaction.save();
+  // Relecture pour renvoyer l'état réellement persisté (le service a pu
+  // modifier le document) plutôt que la version chargée en début de handler.
+  const closed = (await DisputeModel.findById(dispute._id)) ?? dispute;
 
-  dispute.status = input.outcome === 'BUYER' ? DisputeStatus.RESOLVED_BUYER : DisputeStatus.RESOLVED_SELLER;
-  dispute.assignedAdmin = new Types.ObjectId(req.user!.id);
-  dispute.resolution = input.resolution;
-  dispute.resolvedAt = new Date();
-  await dispute.save();
-
-  await AuditService.log({
-    actor: req.user!.id,
-    action: 'dispute.resolved',
-    entityType: 'Dispute',
-    entityId: String(dispute._id),
-    metadata: {
-      outcome: input.outcome,
-      transactionId: String(transaction._id),
-      resolution: input.resolution,
-    },
-  });
-
-  res.status(200).json({ success: true, data: { dispute } });
+  // Pas d'AuditService.log ici : DisputesService.closeForTransaction journalise
+  // déjà `dispute.resolved`, et c'est le seul point de passage. Un second log
+  // dans le controller produirait deux entrées d'audit pour une seule
+  // décision — et il manquerait d'ailleurs le cas du remboursement déclenché
+  // depuis la page Transactions, qui n'est jamais journalisé ailleurs.
+  res.status(200).json({ success: true, data: { dispute: closed } });
 });

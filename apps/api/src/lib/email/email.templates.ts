@@ -375,9 +375,40 @@ export const emailTemplates = {
     return { subject: 'Compte fermé', html: wrap('Compte fermé', body) };
   },
 
+  disputeOpened(params: {
+    firstName: string;
+    role: 'buyer' | 'seller';
+    transactionId: string;
+    reason: string;
+  }) {
+    const firstName = escapeHtml(params.firstName);
+    const isBuyer = params.role === 'buyer';
+    const body = `
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 16px;">${
+        isBuyer
+          ? 'Vous avez ouvert un litige sur votre transaction. Notre équipe examine votre dossier.'
+          : 'Un litige a été ouvert par un acheteur sur une de vos ventes. Le montant reste bloqué tant que notre équipe n\'a pas examiné le dossier.'
+      }</p>
+      <div style="${BOX_STYLE}">
+        <p style="${BOX_LABEL_STYLE}">Motif</p>
+        <p style="${BOX_VALUE_STYLE}">${escapeHtml(params.reason)}</p>
+      </div>
+      <p style="${MUTED_STYLE}">Référence : ${escapeHtml(params.transactionId)}</p>
+      ${cta(isBuyer ? BUYER_DASHBOARD_URL : SELLER_DASHBOARD_URL, isBuyer ? 'Suivre mon litige' : 'Voir mes ventes')}
+      ${
+        isBuyer
+          ? ''
+          : `<p style="${MUTED_STYLE}">Si vous pensez que le litige est infondé, répondez dans la messagerie de la transaction avec vos arguments.</p>`
+      }
+    `;
+    return { subject: 'Litige ouvert', html: wrap('Litige ouvert', body) };
+  },
+
   disputeResolved(params: {
     firstName: string;
     role: 'buyer' | 'seller';
+    outcome: 'BUYER' | 'SELLER';
     transactionId: string;
     resolution: string;
   }) {
@@ -387,8 +418,17 @@ export const emailTemplates = {
       <p style="margin:0 0 16px;">Le litige pour la transaction <strong>${escapeHtml(params.transactionId)}</strong> a été résolu.</p>
       <div style="${BOX_STYLE}">
         <p style="${BOX_LABEL_STYLE}">Décision</p>
+        <p style="${BOX_VALUE_STYLE}">${
+          params.outcome === 'BUYER'
+            ? 'Remboursement de l\'acheteur — vous êtes remboursé de la totalité du montant.'
+            : 'Paiement au vendeur — la vente est validée et le vendeur est payé.'
+        }</p>
+      </div>
+      <div style="${BOX_STYLE}">
+        <p style="${BOX_LABEL_STYLE}">Motif de la décision</p>
         <p style="${BOX_VALUE_STYLE}">${escapeHtml(params.resolution)}</p>
       </div>
+      ${cta(params.role === 'buyer' ? BUYER_DASHBOARD_URL : SELLER_DASHBOARD_URL, 'Voir mes transactions')}
     `;
     return { subject: 'Litige résolu', html: wrap('Litige résolu', body) };
   },

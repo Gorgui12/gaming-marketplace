@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api-client';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { ReviewForm } from '@/components/review-form';
 import { TransactionChat } from '@/components/transaction-chat';
+import { DisputeForm } from '@/components/dispute-form';
 
 interface MyTransaction {
   _id: string;
@@ -15,6 +16,16 @@ interface MyTransaction {
   amount: number;
   currency: string;
   escrowStatus: string;
+}
+
+interface MyDispute {
+  _id: string;
+  transaction: string | { _id: string };
+  reason: string;
+  description: string;
+  status: string;
+  resolution?: string;
+  createdAt: string;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -31,7 +42,35 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 // États où les accès ont potentiellement été libérés et peuvent être relus.
+// DISPUTED en est volontairement absent : pendant un litige, l'API retire le
+// droit de relecture (getForBuyer rejette l'état), le bouton ne doit donc pas
+// laisser croire que les accès sont consultables.
 const ACCESS_VISIBLE_STATES = ['SELLER_DELIVERED', 'BUYER_REVIEWING', 'COMPLETED'];
+
+// États dans lesquels l'acheteur peut encore contester : le séquestre est
+// actif et l'accès n'est pas encore validé par lui. On n'ouvre pas de litige
+// sur une transaction terminée (il n'y a plus rien à trancher) ni sur une
+// transaction en litige ou déjà soldée.
+const DISPUTABLE_STATES = ['ESCROW_ACTIVE', 'SELLER_DELIVERED', 'BUYER_REVIEWING'];
+
+const DISPUTE_STATUS_LABEL: Record<string, string> = {
+  OPEN: 'En cours d\'examen',
+  UNDER_REVIEW: 'En cours d\'examen',
+  WAITING_FOR_BUYER: 'En attente de votre réponse',
+  WAITING_FOR_SELLER: 'En attente du vendeur',
+  RESOLVED_BUYER: 'Tranché en votre faveur — vous êtes remboursé',
+  RESOLVED_SELLER: 'Tranché en faveur du vendeur',
+  CLOSED: 'Clos',
+};
+
+const DISPUTE_REASON_LABEL: Record<string, string> = {
+  ACCESS_INCORRECT: 'Les accès fournis ne correspondent pas à l\'annonce',
+  ACCOUNT_MISMATCH: 'Le compte reçu n\'est pas celui annoncé',
+  SELLER_UNRESPONSIVE: 'Le vendeur ne répond plus',
+  ACCOUNT_INACCESSIBLE: 'Le compte est inaccessible',
+  MAJOR_ISSUE: 'Problème majeur',
+  OTHER: 'Autre motif',
+};
 
 export default function BuyerDashboardPage() {
   const { user } = useCurrentUser();
@@ -43,6 +82,19 @@ export default function BuyerDashboardPage() {
   const [loadingAccess, setLoadingAccess] = useState<string | null>(null);
   const [reviewedTransactionIds, setReviewedTransactionIds] = useState<Set<string>>(new Set());
   const [showReviewForm, setShowReviewForm] = useState<string | null>(null);
+  const [disputes, setDisputes] = useState<MyDispute[]>([]);
+  const [showDisputeForm, setShowDisputeForm] = useState<string | null>(null);
+
+  async function loadDisputes() {
+    try {
+      const d = await apiFetch<{ disputes: MyDispute[] }>('/api/v1/disputes/mine');
+      setDisputes(d.disputes);
+    } catch {
+      // Non bloquant : l'utilisateur voit ses transactions même si la liste
+      // des litiges échoue. L'API refusera toute ouverture en double.
+      setDisputes([]);
+    }
+  }
 
   async function load() {
     try {
@@ -94,6 +146,7 @@ export default function BuyerDashboardPage() {
     if (user === undefined) return;
     void load();
     void loadMyReviews();
+    void loadDisputes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -132,6 +185,13 @@ export default function BuyerDashboardPage() {
 
   const myPurchases = user ? transactions?.filter((t) => t.buyer === user.id) : transactions;
 
+  // Litige portant sur une transaction donnée, le plus récent en premier.
+  function disputeFor(transactionId: string): MyDispute | undefined {
+    return disputes.find(
+      (d) => String(typeof d.transaction === 'string' ? d.transaction : d.transaction?._id) === transactionId,
+    );
+  }
+
   return (
     <>
       <SiteNav />
@@ -144,7 +204,9 @@ export default function BuyerDashboardPage() {
           <p className="mt-6 text-sm text-bone/50">Aucun achat pour l'instant.</p>
         ) : (
           <div className="mt-6 space-y-3">
-            {myPurchases.map((t) => (
+            {myPurchases.map((t) => {
+              const dispute = disputeFor(t._id);
+              return (
               <div key={t._id} className="rounded-ticket border border-white/10 bg-navy-mid p-4">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <p className="font-mono text-sm text-gold">
@@ -154,6 +216,28 @@ export default function BuyerDashboardPage() {
                     {STATUS_LABEL[t.escrowStatus] ?? t.escrowStatus}
                   </span>
                 </div>
+
+                {dispute && (
+                  <div className="mt-3 rounded-lg border border-coral/30 bg-navy-deep p-3">
+                    <p className="text-xs text-coral">
+                      Litige ouvert le{' '}
+                      {new Date(dispute.createdAt).toLocaleDateString('fr-FR')} —{' '}
+                      {DISPUTE_STATUS_LABEL[dispute.status] ?? dispute.status}
+                    </p>
+                    <p className="mt-1 text-xs text-bone/60">
+                      Motif : {DISPUTE_REASON_LABEL[dispute.reason] ?? dispute.reason}
+                    </p>
+                    {dispute.resolution && (
+                      <p className="mt-2 rounded border border-white/10 bg-navy-mid px-2 py-1.5 text-xs text-mint">
+                        Décision : {dispute.resolution}
+                      </p>
+                    )}
+                    <p className="mt-2 text-[11px] text-bone/40">
+                      Pendant l&apos;examen du dossier, le montant reste bloqué et
+                      les accès du compte ne sont plus consultables.
+                    </p>
+                  </div>
+                )}
 
                 {ACCESS_VISIBLE_STATES.includes(t.escrowStatus) && (
                   <div className="mt-3">
@@ -205,11 +289,37 @@ export default function BuyerDashboardPage() {
                   )
                 )}
 
+                {showDisputeForm === t._id && (
+                  <DisputeForm
+                    transactionId={t._id}
+                    onOpened={() => {
+                      setShowDisputeForm(null);
+                      void loadDisputes();
+                      void load();
+                    }}
+                    onCancel={() => setShowDisputeForm(null)}
+                  />
+                )}
+
+                {!dispute && DISPUTABLE_STATES.includes(t.escrowStatus) && (
+                  <button
+                    onClick={() =>
+                      setShowDisputeForm(showDisputeForm === t._id ? null : t._id)
+                    }
+                    className="mt-3 rounded-full border border-coral/40 px-4 py-2 text-xs text-coral hover:bg-coral/10"
+                  >
+                    {showDisputeForm === t._id
+                      ? 'Masquer le formulaire'
+                      : 'Ouvrir un litige'}
+                  </button>
+                )}
+
                 {!['CANCELLED', 'REFUNDED'].includes(t.escrowStatus) && user && (
                   <TransactionChat transactionId={t._id} currentUserId={user.id} />
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

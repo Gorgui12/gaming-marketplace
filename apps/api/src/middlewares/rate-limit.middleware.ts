@@ -74,3 +74,26 @@ export const webhookRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Rate limit d'ouverture de litige.
+ *
+ * 5 par heure : assez pour un acheteur qui se trompe de transaction ou
+ * qui complète son dossier sur plusieurs jours, bien trop peu pour qu'un
+ * script ouvre des dizaines de litiges et inonde les boîtes mail du vendeur
+ * et des administrateurs (chaque ouverture déclenche 2 emails et 2
+ * notifications in-app).
+ */
+export const disputeRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Trop de demandes de litige. Réessayez plus tard.',
+    },
+  },
+});

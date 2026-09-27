@@ -28,6 +28,16 @@ interface MySale {
   sellerAmount?: number;
 }
 
+interface MyDispute {
+  _id: string;
+  transaction: string | { _id: string };
+  reason: string;
+  description: string;
+  status: string;
+  resolution?: string;
+  createdAt: string;
+}
+
 const LISTING_STATUS_LABEL: Record<string, { label: string; color: string }> = {
   DRAFT: { label: 'Brouillon', color: 'bg-white/10 text-bone/50' },
   PENDING_REVIEW: { label: "En attente d'approbation", color: 'bg-gold/15 text-gold' },
@@ -48,10 +58,30 @@ const SALE_STATUS_LABEL: Record<string, string> = {
   REFUNDED: 'Remboursée',
 };
 
+const DISPUTE_STATUS_LABEL: Record<string, string> = {
+  OPEN: 'En cours d\'examen par notre équipe',
+  UNDER_REVIEW: 'En cours d\'examen par notre équipe',
+  WAITING_FOR_BUYER: 'En attente de la réponse de l\'acheteur',
+  WAITING_FOR_SELLER: 'En attente de votre réponse',
+  RESOLVED_BUYER: 'Tranché en faveur de l\'acheteur — remboursement',
+  RESOLVED_SELLER: 'Tranché en votre faveur — vous êtes payé',
+  CLOSED: 'Clos',
+};
+
+const DISPUTE_REASON_LABEL: Record<string, string> = {
+  ACCESS_INCORRECT: 'Les accès fournis ne correspondent pas à l\'annonce',
+  ACCOUNT_MISMATCH: 'Le compte reçu n\'est pas celui annoncé',
+  SELLER_UNRESPONSIVE: 'Le vendeur ne répond plus',
+  ACCOUNT_INACCESSIBLE: 'Le compte est inaccessible',
+  MAJOR_ISSUE: 'Problème majeur',
+  OTHER: 'Autre motif',
+};
+
 export default function SellerDashboardPage() {
   const { user, loading } = useCurrentUser();
   const [listings, setListings] = useState<MyListing[] | null>(null);
   const [sales, setSales] = useState<MySale[] | null>(null);
+  const [disputes, setDisputes] = useState<MyDispute[]>([]);
   const [error, setError] = useState('');
   const [deliveringId, setDeliveringId] = useState<string | null>(null);
   const [credentials, setCredentials] = useState('');
@@ -64,12 +94,24 @@ export default function SellerDashboardPage() {
     apiFetch<{ transactions: MySale[] }>('/api/v1/transactions/mine')
       .then((d) => setSales(d.transactions))
       .catch(() => {});
+    // Litiges ouverts par l'acheteur sur mes ventes : le vendeur doit voir
+    // le motif et pouvoir répondre dans la messagerie, sinon il découvre
+    // l'instruction du paiement à l'établissement de son relevé.
+    apiFetch<{ disputes: MyDispute[] }>('/api/v1/disputes/mine')
+      .then((d) => setDisputes(d.disputes))
+      .catch(() => {});
   }
 
   useEffect(load, []);
 
   // Ne garder que les transactions où JE suis le vendeur.
   const mySales = user ? sales?.filter((t) => t.seller === user.id) : sales;
+
+  function disputeFor(transactionId: string): MyDispute | undefined {
+    return disputes.find(
+      (d) => String(typeof d.transaction === 'string' ? d.transaction : d.transaction?._id) === transactionId,
+    );
+  }
 
   async function handleDeliver(transactionId: string) {
     if (!credentials.trim()) {
@@ -154,7 +196,9 @@ export default function SellerDashboardPage() {
           <p className="mt-4 text-sm text-bone/50">Aucune vente en cours.</p>
         ) : (
           <div className="mt-6 space-y-3">
-            {mySales.map((s) => (
+            {mySales.map((s) => {
+              const dispute = disputeFor(s._id);
+              return (
               <div key={s._id} className="rounded-ticket border border-white/10 bg-navy-mid p-4">
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <p className="font-mono text-sm text-gold">
@@ -164,6 +208,32 @@ export default function SellerDashboardPage() {
                     {SALE_STATUS_LABEL[s.escrowStatus] ?? s.escrowStatus}
                   </span>
                 </div>
+
+                {dispute && (
+                  <div className="mt-3 rounded-lg border border-coral/30 bg-navy-deep p-3">
+                    <p className="text-xs text-coral">
+                      Litige ouvert par l&apos;acheteur le{' '}
+                      {new Date(dispute.createdAt).toLocaleDateString('fr-FR')} —{' '}
+                      {DISPUTE_STATUS_LABEL[dispute.status] ?? dispute.status}
+                    </p>
+                    <p className="mt-1 text-xs text-bone/60">
+                      Motif : {DISPUTE_REASON_LABEL[dispute.reason] ?? dispute.reason}
+                    </p>
+                    <p className="mt-1 text-xs text-bone/50">
+                      Son argumentation : {dispute.description}
+                    </p>
+                    {dispute.resolution && (
+                      <p className="mt-2 rounded border border-white/10 bg-navy-mid px-2 py-1.5 text-xs text-mint">
+                        Décision : {dispute.resolution}
+                      </p>
+                    )}
+                    <p className="mt-2 text-[11px] text-bone/40">
+                      Le paiement reste bloqué jusqu&apos;à la décision. Si le
+                      litige vous paraît infondé, répondez dans la messagerie
+                      ci-dessous avec vos arguments.
+                    </p>
+                  </div>
+                )}
 
                 {s.platformFee != null && s.sellerAmount != null && (
                   <div className="mt-3 space-y-1 rounded-lg border border-white/10 bg-navy-deep p-3 text-xs">
@@ -228,7 +298,8 @@ export default function SellerDashboardPage() {
                   <TransactionChat transactionId={s._id} currentUserId={user.id} />
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

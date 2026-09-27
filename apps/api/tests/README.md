@@ -15,12 +15,19 @@ qui réimplémente un sous-ensemble de l'API Mongoose (`create`, `findById`,
 `findOne`, `find().sort().skip().limit()`, `findByIdAndUpdate`,
 `findOneAndUpdate`, `updateMany`, `.save()`).
 
-Couverture actuelle (41 tests, `apps/api/tests/`):
+Couverture actuelle (129 tests, `apps/api/tests/`):
 - **State machine transactionnelle** — chemin heureux complet, rejet des
   sauts d'état, rejet des usurpations de rôle (acheteur ne peut pas agir
   comme vendeur et inversement), états terminaux sans issue.
 - **`SecureAccountAccessService`** — chiffrement/déchiffrement round-trip,
   refus de libération hors des états autorisés, refus après invalidation.
+- **`DisputesService`** — ouverture (création du dossier + bascule en
+  `DISPUTED` + trace dans `stateHistory`), refus d'un tiers, refus du
+  vendeur, **garde anti-doublon**, refus sur transaction terminée,
+  **notification des deux parties à l'ouverture**, clôture avec
+  notification (y compris de la partie perdante), silêncio quand aucun
+  litige n'est ouvert (remboursement admin direct), idempotence, visibilité
+  des litiges ouverts sur mes ventes pour le vendeur.
 - **`AffiliateCommissionService`** — calcul sur `NET_ORDER_AMOUNT`,
   **anti-double-commission** (contrainte critique §31), blocage
   auto-parrainage, blocage affilié `BLOCKED`, réversion sur remboursement,
@@ -36,6 +43,11 @@ Couverture actuelle (41 tests, `apps/api/tests/`):
 - **`TransactionsService`** — gardes-fous à l'achat (auto-achat, jeu
   désactivé, annonce non publiée), autorisation stricte sur `deliver()`/
   `confirm()` (rejet si l'appelant n'est ni acheteur ni vendeur).
+  **`adminRefund`/`adminReleaseToSeller`** : révocation des accès déjà
+  livrés lors d'un remboursement (et seulement si ils l'étaient — la trace
+  « jamais livré » est préservée), non-révocation quand la vente est
+  validée, solde du litige ouvert avec le libellé de décision, repli sur la
+  raison technique hors litige.
 
 Plus des tests purs sans mock sur `packages/utils` (arrondi monétaire,
 génération de référence/code, slugification) et `packages/config` (calcul
