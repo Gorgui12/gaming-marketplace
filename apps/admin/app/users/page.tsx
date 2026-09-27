@@ -12,6 +12,7 @@ interface AdminUser {
   firstName: string;
   lastName: string;
   country: string;
+  phone?: string;
   roles: string[];
   status: string;
   emailVerified: boolean;
@@ -122,7 +123,7 @@ export default function AdminUsersPage() {
     <AdminShell title="Utilisateurs">
       <div className="mb-4 flex flex-wrap gap-2">
         <input
-          placeholder="Rechercher par email, username, nom…"
+          placeholder="Rechercher par email, username, nom, téléphone…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -174,6 +175,7 @@ export default function AdminUsersPage() {
                 <tr>
                   <th className="px-4 py-3">Utilisateur</th>
                   <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Téléphone</th>
                   <th className="px-4 py-3">Rôles</th>
                   <th className="px-4 py-3">Statut</th>
                   <th className="px-4 py-3">Tx / Ventes</th>
@@ -184,7 +186,7 @@ export default function AdminUsersPage() {
               <tbody>
                 {data.users.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-6 text-center text-bone/50">
+                    <td colSpan={8} className="px-4 py-6 text-center text-bone/50">
                       Aucun utilisateur trouvé.
                     </td>
                   </tr>
@@ -261,6 +263,18 @@ function UserRow({
           >
             {u.emailVerified ? 'Vérifié' : 'Non vérifié'}
           </span>
+        </td>
+        <td className="px-4 py-3">
+          {u.phone ? (
+            <a
+              href={`tel:${u.phone.replace(/[^\d+]/g, '')}`}
+              className="font-mono text-xs text-bone/60 hover:text-gold"
+            >
+              {u.phone}
+            </a>
+          ) : (
+            <span className="text-bone/25">—</span>
+          )}
         </td>
         <td className="px-4 py-3">
           <div className="flex flex-wrap gap-1">
@@ -360,7 +374,7 @@ function UserRow({
       </tr>
       {editingRoles && (
         <tr className="border-t border-white/5 bg-navy-mid/40">
-          <td colSpan={7} className="px-4 py-3">
+          <td colSpan={8} className="px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               {ALL_ROLES.map((r) => {
                 const active = draftRoles.includes(r);

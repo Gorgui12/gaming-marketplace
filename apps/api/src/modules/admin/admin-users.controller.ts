@@ -50,7 +50,19 @@ export const listAdminUsers = asyncHandler(async (req: Request, res: Response) =
   if (query.emailVerified !== undefined) filter.emailVerified = query.emailVerified;
   if (query.search) {
     const rx = new RegExp(query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ email: rx }, { username: rx }, { firstName: rx }, { lastName: rx }];
+    // Le téléphone est cherché sur la version « brute » du numéro : les
+    // utilisateurs saisissent des formats variés (espaces, points, tirets) et
+    // attendent à les trouver malgré la ponctuation stockée.
+    const digits = query.search.replace(/\D/g, '');
+    const phoneRx = digits.length >= 3 ? new RegExp(digits, 'i') : null;
+    filter.$or = [
+      { email: rx },
+      { username: rx },
+      { firstName: rx },
+      { lastName: rx },
+      { phone: rx },
+      ...(phoneRx ? [{ phone: phoneRx }] : []),
+    ];
   }
 
   const skip = (query.page - 1) * query.pageSize;
