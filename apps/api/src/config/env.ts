@@ -48,6 +48,22 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY est obligatoire'),
   RESEND_FROM: z.string().min(1, 'RESEND_FROM est obligatoire'),
 
+  // Adresse de support affichée dans les pieds d'email et dans les pages web
+  // qui invitent à contacter l'équipe.
+  EMAIL_SUPPORT_ADDRESS: z
+    .string()
+    .email('EMAIL_SUPPORT_ADDRESS doit être une adresse email valide')
+    .default('support@gamingmarket.store'),
+
+  // Reply-To de tous les emails sortants. Indispensable : un `From` en
+  // `noreply@` sans Reply-To est traité comme un envoi non sollicité par les
+  // filtres (Apple/iCloud en particulier), et rendait inopérantes les
+  // mentions « répondez à cet email » présentes dans les templates.
+  RESEND_REPLY_TO: z
+    .string()
+    .email('RESEND_REPLY_TO doit être une adresse email valide')
+    .default('support@gamingmarket.store'),
+
   GOOGLE_CLIENT_ID: z.string().optional(),
 
   CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),

@@ -118,6 +118,8 @@ CORS_ALLOWED_ORIGINS=https://gamingmarket.store,https://admin.gamingmarket.store
 RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=100
 RESEND_FROM=Gaming Marketplace <noreply@gamingmarket.store>
+RESEND_REPLY_TO=support@gamingmarket.store
+EMAIL_SUPPORT_ADDRESS=support@gamingmarket.store
 GOOGLE_CLIENT_ID=931697051716-3h1m5velt5e7kev2n5srdpfonvuhc1ja.apps.googleusercontent.com
 TRUST_PROXY_HOPS=2
 NODE_OPTIONS=--max-old-space-size=384
@@ -161,6 +163,67 @@ vérifier après avoir posé la variable : dans les logs Render, `remoteAddress`
 `127.0.0.1` (c'est normal, le proxy est local), mais le `req.ip` exploité par le
 rate limiter doit correspondre à l'IP du visiteur.
 
+### 3.2 Email : délivrabilité (SPF / DKIM / DMARC)
+
+Les emails ne partent que par l'API HTTP de Resend (`email.service.ts`), aucun port
+SMTP n'est ouvert. Trois éléments conditionnent la délivrabilité, et **les deux
+premiers se règlent chez Resend et chez le registrar, pas dans le code**.
+
+**1. Le domaine doit être vérifié dans Resend.** Dashboard Resend → *Domains* →
+*Add Domain* → `gamingmarket.store`. Resend n'affiche `verified` que lorsque ses
+records sont posés **et** détectés. Sans cela, aucun envoi n'aboutit.
+
+**2. Les records DNS doivent être posés chez le registrar** (LWS Hosting, ou
+l'hébergeur du site). Resend en fournit trois ; tous doivent exister :
+
+| Type | Nom | Valeur |
+| --- | --- | --- |
+| TXT | `resend._domainkey` | la clé publique affichée par Resend |
+| CNAME | `send` | `send.forge.rmta.net` |
+| CNAME | `rsend` | `rsend-euw1.forge.rmta.net` |
+
+`send` et `rsend` pointent vers la région du compte : **eu-west-1** pour
+l'Europe. Les copier depuis le dashboard plutôt que de les deviner.
+
+En complément, à la racine du domaine :
+
+| Type | Nom | Valeur |
+| --- | --- | --- |
+| TXT | `@` | `v=spf1 include:amazonses.com ~all` |
+| TXT | `_dmarc` | `v=DMARC1; p=quarantine; rua=mailto:dmarcreports@gamingmarket.store; sp=quarantine` |
+
+L'enregistrement SPF est **unique** : s'il en existe déjà un (le domaine a une
+boîte mail chez LWS), le fusionner, sinon l'alignement DMARC échoue. Un SPF à
+`-all` est correct et plus strict que `~all` — le laisser.
+
+Deux points de vigilance sur `_dmarc` :
+
+- `rua=mailto:dmarcreports@…` n'est exploitable que si la boîte
+  `dmarcreports@gamingmarket.store` **existe** (MX → `mail.gamingmarket.store`).
+  Sinon les rapports partent en bounce.
+- Une fois DMARC en place et les rapportsconsultés, passer de `p=quarantine` à
+  `p=reject` : c'est ce qui verrouille l'alignement.
+
+**3. Côté code**, ce qui a été fait et ne doit pas être annulé
+(`apps/api/src/lib/email/`) :
+
+- **Chaque email part en `multipart/alternative` avec une partie texte**
+  (`htmlToText()`). Un email HTML-only est la première cause de mise en
+  indésirables sur iPhone : le filtre d'iCloud Mail le traite comme du phishing
+  alors que Gmail le tolère.
+- **Thème clair, pas de fond marine.** Fond sombre + bandeau doré + un unique
+  bouton pilule est la structure exacte des mails de hameçonnage, et c'est ce
+  que le classifieur de contenu d'Apple reconnaissait.
+- **`Reply-To` systématique** (`RESEND_REPLY_TO`) et emails en `text/html`
+  **et** `text/plain`.
+- Contrat de code : un échec d'envoi remonte (`email.service.ts` ne l'avale
+  plus) et chaque email porte un `tag` de catégorie, ce qui permet de filtrer
+  les envois par type dans le dashboard Resend.
+
+Pas de `List-Unsubscribe` ici : tous nos emails sont transactionnels
+(confirmation, paiement, modération) et l'option s'y opposerait à une
+désinscription qui casserait le parcours. L'en-tête est réservé au cas où une
+campagne commerciale serait ajoutée.
 
 ## 4. Secrets
 

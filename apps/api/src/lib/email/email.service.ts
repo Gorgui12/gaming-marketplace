@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import { logger } from '../logger.js';
 import { env } from '../../config/env.js';
 import { emailTemplates } from './email.templates.js';
+import { htmlToText } from './html-to-text.js';
 
 const resend = new Resend(env.RESEND_API_KEY);
 
@@ -22,28 +23,57 @@ function normalizeFrom(raw: string): string {
 }
 
 export class EmailService {
-  private static async send(to: string, subject: string, html: string) {
+  /**
+   * Point d'envoi unique.
+   *
+   * - `text` en plus de `html` : sans partie texte brut l'email part en
+   *   HTML-only, ce qu'Apple Mail / iCloud Mail sanctionne au point de
+   *   classer le message en indésirables (Gmail et Outlook le tolèrent).
+   * - `replyTo` : `noreply@` sans adresse de réponse est un signal
+   *   « envoi de masse » pour les filtres, et rendait inopérant le
+   *   « répondez à cet email » présent dans plusieurs templates.
+   * - `tags` : permet de filtrer les envois par type dans le dashboard
+   *   Resend.
+   *
+   * Laisse la rejection remonter : les 18 appelants sont tous en
+   * fire-and-forget avec leur propre `.catch()`, qui était jusque-là du
+   * code mort puisque cette méthode avalait tout en interne. Un échec
+   * d'envoi doit donc rester observable.
+   */
+  private static async send(
+    to: string,
+    subject: string,
+    html: string,
+    tag: string,
+  ): Promise<void> {
+    const from = normalizeFrom(env.RESEND_FROM);
     try {
-      const { error } = await resend.emails.send({
-        from: normalizeFrom(env.RESEND_FROM),
+      const { data, error } = await resend.emails.send({
+        from,
         to,
         subject,
         html,
+        text: htmlToText(html),
+        replyTo: env.RESEND_REPLY_TO,
+        tags: [{ name: 'categorie', value: tag }],
       });
       if (error) {
         throw new Error(error.message);
       }
-      logger.info({ to, subject }, 'Email envoyé');
+      logger.info({ to, subject, tag, id: data?.id }, 'Email envoyé');
     } catch (err) {
       logger.error(
         {
           err,
           to,
           subject,
-          from: env.RESEND_FROM,
+          tag,
+          from,
+          replyTo: env.RESEND_REPLY_TO,
         },
         'Échec d\'envoi d\'email',
       );
+      throw err;
     }
   }
 
@@ -103,12 +133,15 @@ export class EmailService {
         message: 'Resend joignable et authentifié',
       };
     }
+    const testHtml = emailTemplates.welcome('Test').html;
     try {
       const { error } = await resend.emails.send({
         from: normalizeFrom(env.RESEND_FROM),
         to: sendTo,
         subject: `Test Resend GamingMarket — ${new Date().toLocaleString('fr-FR')}`,
-        html: '<p>Ceci est un email de test envoyé depuis le back-office de GamingMarket.</p>',
+        html: testHtml,
+        text: htmlToText(testHtml),
+        replyTo: env.RESEND_REPLY_TO,
       });
       if (error) throw new Error(error.message);
       return {
@@ -127,17 +160,17 @@ export class EmailService {
 
   static async sendWelcome(to: string, firstName: string) {
     const { subject, html } = emailTemplates.welcome(firstName);
-    await this.send(to, subject, html);
+    await this.send(to, subject, html, 'welcome');
   }
 
   static async sendPasswordReset(to: string, firstName: string, resetUrl: string) {
     const { subject, html } = emailTemplates.passwordReset(firstName, resetUrl);
-    await this.send(to, subject, html);
+    await this.send(to, subject, html, 'password-reset');
   }
 
   static async sendEmailVerification(to: string, firstName: string, verifyUrl: string) {
     const { subject, html } = emailTemplates.emailVerification(firstName, verifyUrl);
-    await this.send(to, subject, html);
+    await this.send(to, subject, html, 'verification');
   }
 
   static async sendTransactionCreated(params: {
@@ -150,7 +183,7 @@ export class EmailService {
     currency: string;
   }) {
     const { subject, html } = emailTemplates.transactionCreated(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'transaction-created');
   }
 
   static async sendTransactionPaymentConfirmed(params: {
@@ -161,7 +194,7 @@ export class EmailService {
     listingTitle: string;
   }) {
     const { subject, html } = emailTemplates.transactionPaymentConfirmed(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'payment-confirmed');
   }
 
   static async sendTransactionPaymentFailed(params: {
@@ -171,7 +204,7 @@ export class EmailService {
     listingTitle: string;
   }) {
     const { subject, html } = emailTemplates.transactionPaymentFailed(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'payment-failed');
   }
 
   static async sendTransactionDelivered(params: {
@@ -182,7 +215,7 @@ export class EmailService {
     listingTitle: string;
   }) {
     const { subject, html } = emailTemplates.transactionDelivered(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'delivered');
   }
 
   static async sendTransactionCompleted(params: {
@@ -197,7 +230,7 @@ export class EmailService {
     currency?: string;
   }) {
     const { subject, html } = emailTemplates.transactionCompleted(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'transaction-completed');
   }
 
   static async sendTransactionRefunded(params: {
@@ -208,12 +241,12 @@ export class EmailService {
     reason: string;
   }) {
     const { subject, html } = emailTemplates.transactionRefunded(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'refunded');
   }
 
   static async sendListingApproved(params: { to: string; firstName: string; listingTitle: string }) {
     const { subject, html } = emailTemplates.listingApproved(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'listing-approved');
   }
 
   static async sendListingRejected(params: {
@@ -223,22 +256,22 @@ export class EmailService {
     notes?: string;
   }) {
     const { subject, html } = emailTemplates.listingRejected(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'listing-rejected');
   }
 
   static async sendListingRemoved(params: { to: string; firstName: string; listingTitle: string }) {
     const { subject, html } = emailTemplates.listingRemoved(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'listing-removed');
   }
 
   static async sendAccountSuspended(params: { to: string; firstName: string; reason: string }) {
     const { subject, html } = emailTemplates.accountSuspended(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'account-suspended');
   }
 
   static async sendAccountBanned(params: { to: string; firstName: string; reason: string }) {
     const { subject, html } = emailTemplates.accountBanned(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'account-banned');
   }
 
   static async sendDisputeResolved(params: {
@@ -249,7 +282,7 @@ export class EmailService {
     resolution: string;
   }) {
     const { subject, html } = emailTemplates.disputeResolved(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'dispute-resolved');
   }
 
   static async sendSellerStatusChanged(params: {
@@ -258,6 +291,6 @@ export class EmailService {
     status: string;
   }) {
     const { subject, html } = emailTemplates.sellerStatusChanged(params);
-    await this.send(params.to, subject, html);
+    await this.send(params.to, subject, html, 'seller-status');
   }
 }

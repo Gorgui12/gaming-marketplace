@@ -41,6 +41,9 @@ primary_region = "cdg"
   RATE_LIMIT_MAX = "100"
   # Expéditeur des emails sortants. Doit être un domaine vérifié dans Resend.
   RESEND_FROM = "Gaming Marketplace <noreply@gamingmarket.store>"
+  # Reply-To de tous les emails (obligatoire avec un From en `noreply@`).
+  RESEND_REPLY_TO = "support@gamingmarket.store"
+  EMAIL_SUPPORT_ADDRESS = "support@gamingmarket.store"
   # ID client OAuth "Sign in with Google". Public par nature (présent dans le
   # bundle du navigateur) : ce n'est pas un secret, mais il doit être identique
   # à NEXT_PUBLIC_GOOGLE_CLIENT_ID côté web.
