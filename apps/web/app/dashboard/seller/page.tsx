@@ -7,14 +7,18 @@ import { SiteFooter } from '@/components/site-footer';
 import { apiFetch } from '@/lib/api-client';
 import { useCurrentUser } from '@/lib/use-current-user';
 import { TransactionChat } from '@/components/transaction-chat';
+import { ShareActions } from '@/components/share-actions';
 
 interface MyListing {
   _id: string;
   title: string;
+  slug: string;
   price: number;
   currency: string;
   status: string;
   moderationStatus: string;
+  views: number;
+  shareCount?: number;
 }
 
 interface MySale {
@@ -183,6 +187,33 @@ export default function SellerDashboardPage() {
                 <p className="mt-1 font-mono text-sm text-gold">
                   {l.price.toLocaleString('fr-FR')} {l.currency}
                 </p>
+
+                {/* Partage réservé aux annonces publiées : partager une
+                    brouillon ou une annonce en attente d'approbation envoie un
+                    lien qui répond 404, et le vendeur conclut que la
+                    plateforme est cassée. */}
+                {l.status === 'PUBLISHED' ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/10 pt-3">
+                    <ShareActions
+                      slug={l.slug}
+                      title={l.title}
+                      price={l.price}
+                      currency={l.currency}
+                      shareCount={l.shareCount}
+                      onCounted={(count) =>
+                        setListings((prev) =>
+                          prev?.map((x) => (x._id === l._id ? { ...x, shareCount: count } : x)) ?? null,
+                        )
+                      }
+                    />
+                    <p className="text-[11px] text-bone/40">
+                      {l.views} vue{l.views > 1 ? 's' : ''}
+                      {l.shareCount
+                        ? ` · ${l.shareCount} partage${l.shareCount > 1 ? 's' : ''}`
+                        : ' · pas encore partagé'}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

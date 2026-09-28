@@ -15,8 +15,9 @@ import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { ListingGallery } from '@/components/listing-gallery';
 import { BuyButton } from '@/components/buy-button';
+import { ShareActions } from '@/components/share-actions';
 import { apiFetch } from '@/lib/api-client';
-import { breadcrumbJsonLd } from '@/lib/seo';
+import { breadcrumbJsonLd, listingPath } from '@/lib/seo';
 import type { Listing } from '@gm/types';
 
 async function getListing(slug: string): Promise<Listing | null> {
@@ -121,7 +122,7 @@ export default async function ListingDetailPage({
               breadcrumbJsonLd([
                 { name: 'Accueil', url: '/' },
                 { name: 'eFootball', url: '/marketplace/efootball' },
-                { name: listing.title, url: `/marketplace/efootball/${listing.slug}` },
+                { name: listing.title, url: listingPath(listing.slug) },
               ]),
             ),
           }}
@@ -153,6 +154,16 @@ export default async function ListingDetailPage({
               <span className="inline-flex items-center gap-1.5 text-xs text-bone/40">
                 <Eye size={13} /> {listing.views} vues
               </span>
+              {/* Partage discret à côté des stats plutôt qu'en pleine largeur :
+                  c'est une action secondaire pour un visiteur, alors que
+                  WhatsApp est le canal principal côté vendeur (dashboard). */}
+              <ShareActions
+                slug={listing.slug}
+                title={listing.title}
+                price={listing.price}
+                currency={listing.currency}
+                shareCount={listing.shareCount}
+              />
             </div>
 
             {/* Prix + achat — placés en haut sur mobile, la sidebar les reprend en desktop */}
@@ -273,12 +284,22 @@ export default async function ListingDetailPage({
         {/* Barre d'achat fixe — mobile/tablette uniquement, toujours accessible */}
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-navy-deep/95 px-4 pb-safe backdrop-blur lg:hidden">
           <div className="mx-auto max-w-6xl py-3">
-            <div className="mb-2 flex items-baseline justify-between">
+            <div className="mb-2 flex items-baseline justify-between gap-3">
               <span className="font-mono text-lg leading-tight text-gold">
                 {listing.price.toLocaleString('fr-FR')}{' '}
                 <span className="text-xs">{listing.currency}</span>
               </span>
-              <span className="text-[11px] text-bone/40">Wave · Orange Money</span>
+              {/* Menu compact et non rangée de boutons : la barre mobile n'a
+                  pas la place, et le partage y doit rester accessible en
+                  permanence pendant que l'utilisateur scrolle l'annonce. */}
+              <ShareActions
+                slug={listing.slug}
+                title={listing.title}
+                price={listing.price}
+                currency={listing.currency}
+                shareCount={listing.shareCount}
+                variant="button"
+              />
             </div>
             <BuyButton listingId={listing._id} compact />
           </div>

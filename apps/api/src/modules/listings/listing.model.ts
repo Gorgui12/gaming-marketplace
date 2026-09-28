@@ -32,6 +32,16 @@ const listingSchema = new Schema(
     moderationNotes: { type: String },
     views: { type: Number, default: 0 },
     favoritesCount: { type: Number, default: 0 },
+    /**
+     * Partages dédupliqués (une session de tracking = un partage).
+     *
+     * Incrémenté uniquement via `ListingsService.registerShare`, qui s'appuie
+     * sur l'index unique de `ListingShare`. Ne pas l'incrémenter à la main :
+     * c'est précisément le décompte « une fois par session » qui rend le
+     * chiffre lisible pour le vendeur, là où `views` est gonflé par les
+     * rechargements et les rendus serveur.
+     */
+    shareCount: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

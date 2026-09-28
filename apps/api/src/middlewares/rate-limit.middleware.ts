@@ -76,6 +76,30 @@ export const webhookRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limit du signalement de partage d'annonce.
+ *
+ * Route publique, donc la seule chose qui relie l'appelant à sa bonne foi est
+ * son IP. La déduplication par session de tracking empêche déjà de gonfler le
+ * compteur en recliquant, mais elle est contournable en vidant les cookies : ce
+ * limiteur ferme la seconde porte, en bornant le nombre de sessions distinctes
+ * qu'une même IP peut faire naître en une heure.
+ *
+ * 30 par heure : très au-dessus du vendeur qui envoie son annonce dans une
+ * dizaine de groupes, et très en dessous de ce qu'un script pourrait faire pour
+ * afficher un chiffre flatuleux sur sa fiche.
+ */
+export const listingShareRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { code: 'RATE_LIMITED', message: 'Trop de partages signalés. Réessayez plus tard.' },
+  },
+});
+
+/**
  * Rate limit d'ouverture de litige.
  *
  * 5 par heure : assez pour un acheteur qui se trompe de transaction ou

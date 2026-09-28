@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { apiFetch } from '@/lib/api-client';
+import { listingUrl } from '@/lib/seo';
 import type { Listing, Paginated } from '@gm/types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
@@ -18,7 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const result = await apiFetch<Paginated<Listing>>('/api/v1/listings?pageSize=50');
     listingEntries = result.items.map((listing) => ({
-      url: `${BASE_URL}/marketplace/efootball/${listing.slug}`,
+      url: listingUrl(listing.slug),
       changeFrequency: 'daily' as const,
       priority: 0.7,
     }));

@@ -100,6 +100,14 @@ export interface Listing {
   moderationNotes?: string;
   views: number;
   favoritesCount: number;
+  /**
+   * Partages distincts (une session de tracking = un partage).
+   *
+   * Absent des documents créés avant l'ajout du champ : la valeur par défaut
+   * du schéma ne s'applique qu'aux nouveaux documents, pas aux annonces déjà en
+   * base. D'où le `?` côté front, qui affiche le total seulement s'il existe.
+   */
+  shareCount?: number;
   createdAt: string;
   updatedAt: string;
 }

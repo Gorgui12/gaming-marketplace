@@ -40,6 +40,43 @@ export function absoluteUrl(path: string): string {
 }
 
 /**
+ * Slug de jeu par défaut des routes publiques d'annonce.
+ *
+ * L'application n'expose aujourd'hui qu'eFootball (`/marketplace/efootball/...`) :
+ * c'est la seule route de détail qui existe, donc le seul slug de jeu qu'on
+ * peut déduire du contexte sans peupler la relation `game`.
+ */
+export const DEFAULT_GAME_SLUG = 'efootball';
+
+/**
+ * Chemin public d'une annonce.
+ *
+ * Fonction canonique : ce chemin était recopié en dur dans la page de détail,
+ * la carte d'annonce et le sitemap. Un lien de partage construit ailleurs avec
+ * la mauvaise variante casserait silencieusement, puisque la page de detail
+ * n'existe que pour eFootball.
+ *
+ * Limite connue : l'API renvoie `listing.game` comme ObjectId non peuplé, on ne
+ * peut donc pas deduire le slug du jeu cote front. Le parametre `gameSlug` est
+ * prevu pour le jour ou le routage multi-jeu arrive — il faudra alors le
+ * transmettre depuis la route ou peupler le jeu.
+ */
+export function listingPath(
+  listingSlug: string,
+  gameSlug: string = DEFAULT_GAME_SLUG,
+): string {
+  return `/marketplace/${gameSlug}/${listingSlug}`;
+}
+
+/** URL absolue et partageable d'une annonce (Open Graph, WhatsApp, sitemap). */
+export function listingUrl(
+  listingSlug: string,
+  gameSlug: string = DEFAULT_GAME_SLUG,
+): string {
+  return absoluteUrl(listingPath(listingSlug, gameSlug));
+}
+
+/**
  * JSON-LD Organization — identité de l'entreprise pour le knowledge graph,
  * avec areaServed explicitement centré Sénégal/UEMOA.
  */

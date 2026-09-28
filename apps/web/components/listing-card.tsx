@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { BadgeCheck, Users } from 'lucide-react';
+import { listingPath } from '@/lib/seo';
 import type { Listing } from '@gm/types';
 
 export function ListingCard({ listing }: { listing: Listing }) {
@@ -8,7 +9,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
   return (
     <Link
-      href={`/marketplace/efootball/${listing.slug}`}
+      href={listingPath(listing.slug)}
       className="group ticket-notch flex flex-col overflow-hidden rounded-ticket border border-white/10 bg-navy-mid transition hover:border-gold/40"
     >
       <div className="relative aspect-[16/10] bg-navy-deep">

@@ -181,3 +181,21 @@ export const NotificationType = {
   CONTACT_INFO_BLOCKED: 'CONTACT_INFO_BLOCKED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
+// ==================== PARTAGE D'ANNONCE ====================
+
+/**
+ * Canaux de partage d'une annonce.
+ *
+ * Défini dans le package partagé et non dans `apps/web/lib/share.ts` : le front
+ * construit le bouton, l'API valide la valeur reçue, et les deux doivent
+ * accepter exactement le même ensemble. Si la liste vivait côté front, ajouter
+ * Telegram à l'UI produirait un 400 silencieux jusqu'à ce que quelqu'un
+ * pense à mettre à jour l'API.
+ *
+ * `native` n'est pas un réseau : c'est la feuille de partage du système, qui
+ * expose Telegram, X, SMS… sans maintenir une entrée par application
+ * installée.
+ */
+export const SHARE_CHANNELS = ['whatsapp', 'facebook', 'native', 'copy'] as const;
+export type ShareChannel = (typeof SHARE_CHANNELS)[number];

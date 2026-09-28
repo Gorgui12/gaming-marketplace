@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SHARE_CHANNELS } from '@gm/types';
 import { MIN_CHECKOUT_AMOUNT_XOF } from './transaction.schema.js';
 
 export const createListingSchema = z.object({
@@ -33,3 +34,20 @@ export const listingSearchQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(50).default(20),
 });
 export type ListingSearchQuery = z.infer<typeof listingSearchQuerySchema>;
+
+/**
+ * Signalement d'un partage d'annonce.
+ *
+ * `sessionId` est borné en longueur : c'est un UUID (36 caractères) émis par
+ * le front, et la valeur est stockée en base. Sans plafond, un appelant pourrait
+ * faire écrire des chaînes arbitrairement longues dans la collection — d'où le
+ * refus plutôt qu'un simple `z.string()`.
+ *
+ * La fenêtre de déduplication est appliquée côté serveur, pas ici : elle dépend
+ * de la durée de vie du cookie de tracking, que le client ne contrôle pas.
+ */
+export const shareListingSchema = z.object({
+  channel: z.enum(SHARE_CHANNELS),
+  sessionId: z.string().min(8).max(64),
+});
+export type ShareListingInput = z.infer<typeof shareListingSchema>;
