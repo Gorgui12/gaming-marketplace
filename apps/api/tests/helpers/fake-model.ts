@@ -17,9 +17,39 @@
 type Doc = Record<string, unknown> & { _id: string };
 
 let idCounter = 0;
+/**
+ * Identifiants au format ObjectId (24 caractères hexadécimaux).
+ *
+ * Pas un détail esthétique : le code testé appelle `new Types.ObjectId(id)` —
+ * la newsletter convertit ainsi les identifiants d'annonces avant de les
+ * stocker — et le constructeur de bson refuse une chaîne qui n'a pas la bonne
+ * longueur. Avec des identifiants de type `fake-id-1`, le test échouait sur une
+ * BSONError qui n'a rien à voir avec la logique testée.
+ */
 function nextId(): string {
   idCounter += 1;
-  return `fake-id-${idCounter}`;
+  return idCounter.toString(16).padStart(24, '0');
+}
+
+/**
+ * Lecture d'un chemin pointé (`marketing.optedIn`) dans un document.
+ * Mongoose résout ces clés en parcourant les sous-documents ; sans ça, la
+ * newsletter et le consentement marketing seraient imbriqués sur une chaîne
+ * littérale qui n'existe jamais, et les tests passeraient à vide.
+ */
+function getPath(doc: Doc, key: string): unknown {
+  if (!key.includes('.')) return doc[key];
+  let current: unknown = doc;
+  for (const part of key.split('.')) {
+    if (current === null || typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+/** Vérité d'une valeur absente, pour les opérateurs de comparaison. */
+function present(value: unknown): boolean {
+  return value !== undefined && value !== null;
 }
 
 function matchesFilter(doc: Doc, filter: Record<string, unknown>): boolean {
@@ -28,26 +58,37 @@ function matchesFilter(doc: Doc, filter: Record<string, unknown>): boolean {
       const clauses = expected as Record<string, unknown>[];
       return clauses.some((clause) => matchesFilter(doc, clause));
     }
-    const actual = doc[key];
+    const actual = getPath(doc, key);
 
     if (expected !== null && typeof expected === 'object' && !Array.isArray(expected)) {
       const ops = expected as Record<string, unknown>;
       return Object.entries(ops).every(([op, val]) => {
         switch (op) {
           case '$gt':
-            return compare(actual) > compare(val);
+            return present(actual) && compare(actual) > compare(val);
           case '$gte':
-            return compare(actual) >= compare(val);
+            return present(actual) && compare(actual) >= compare(val);
           case '$lt':
-            return compare(actual) < compare(val);
+            return present(actual) && compare(actual) < compare(val);
           case '$lte':
-            return compare(actual) <= compare(val);
+            return present(actual) && compare(actual) <= compare(val);
           case '$in':
             return Array.isArray(val) && val.some((v) => String(v) === String(actual));
+          // Utilisé par la sélection de la newsletter pour écarter les
+          // annonces déjà mises en avant. On normalise les ObjectId en
+          // chaîne, sinon `String(ObjectId)` et `String(id)` ne
+          // correspondraient pas.
+          case '$nin':
+            return (
+              Array.isArray(val) && !val.some((v) => present(actual) && String(v) === String(actual))
+            );
           case '$ne':
-            return String(actual) !== String(val);
+            // MongoDB: `$ne` sélectionne les documents où le champ est
+            // absent. Reproduit ici, sinon `token: {$ne: null}` remonterait
+            // des comptes sans jeton.
+            return !present(actual) || String(actual) !== String(val);
           case '$exists':
-            return val ? actual !== undefined : actual === undefined;
+            return val ? present(actual) : !present(actual);
           default:
             return true;
         }
@@ -64,13 +105,47 @@ function compare(value: unknown): number {
   return Number(value);
 }
 
+/** Écrit une valeur en chemin pointé (`marketing.optedIn`), en créant les paliers manquants. */
+function setPath(doc: Doc, key: string, value: unknown): void {
+  const parts = key.split('.');
+  let current = doc;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const part = parts[i]!;
+    const next = current[part];
+    if (next === null || typeof next !== 'object') {
+      current[part] = {};
+    }
+    current = current[part] as Doc;
+  }
+  current[parts[parts.length - 1]!] = value;
+}
+
+/** Supprime une valeur en chemin pointé. */
+function unsetPath(doc: Doc, key: string): void {
+  const parts = key.split('.');
+  let current: unknown = doc;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    if (current === null || typeof current !== 'object') return;
+    current = (current as Record<string, unknown>)[parts[i]!];
+  }
+  if (current !== null && typeof current === 'object') {
+    delete (current as Record<string, unknown>)[parts[parts.length - 1]!];
+  }
+}
+
 function applyUpdate(doc: Doc, update: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(update)) {
     if (key === '$set') {
-      Object.assign(doc, value as Record<string, unknown>);
+      for (const [path, val] of Object.entries(value as Record<string, unknown>)) {
+        setPath(doc, path, val);
+      }
+    } else if (key === '$unset') {
+      for (const path of Object.keys(value as Record<string, unknown>)) {
+        unsetPath(doc, path);
+      }
     } else if (key === '$inc') {
-      for (const [field, delta] of Object.entries(value as Record<string, number>)) {
-        doc[field] = ((doc[field] as number) ?? 0) + delta;
+      for (const [path, delta] of Object.entries(value as Record<string, number>)) {
+        setPath(doc, path, ((getPath(doc, path) as number) ?? 0) + delta);
       }
     } else {
       doc[key] = value;
@@ -137,18 +212,30 @@ interface QueryChain<T> extends Promise<T[]> {
   lean(): QueryChain<T>;
 }
 
+/**
+ * Tri multi-champs, comme le fait MongoDB : `sort({ views: -1, createdAt: -1 })`
+ * classe sur la première clé, puis départage les égalités sur la suivante.
+ * L'implémentation précédente ne retenait que la première clé, ce qui suffisait
+ * aux tests existants mais rendrait la sélection de la newsletter (qui départage
+ * les annonces à vues égales par ancienneté) non testable.
+ */
+function sortDocs<T extends Doc>(items: T[], spec: Record<string, 1 | -1>): T[] {
+  const entries = Object.entries(spec);
+  return [...items].sort((a, b) => {
+    for (const [field, dir] of entries) {
+      const av = compare(getPath(a, field));
+      const bv = compare(getPath(b, field));
+      if (av !== bv) return dir === -1 ? bv - av : av - bv;
+    }
+    return 0;
+  });
+}
+
 function makeQueryChain<T extends Doc>(items: T[]): QueryChain<T> {
   let result = [...items];
   const chain = {
     sort(spec: Record<string, 1 | -1>) {
-      const [field, dir] = Object.entries(spec)[0] ?? [];
-      if (field) {
-        result = [...result].sort((a, b) => {
-          const av = compare(a[field]);
-          const bv = compare(b[field]);
-          return dir === -1 ? bv - av : av - bv;
-        });
-      }
+      result = sortDocs(result, spec);
       return chain;
     },
     skip(n: number) {

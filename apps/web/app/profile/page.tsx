@@ -6,7 +6,7 @@ import { Pencil } from 'lucide-react';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
 import { apiFetch } from '@/lib/api-client';
-import { useCurrentUser } from '@/lib/use-current-user';
+import { notifyAuthChanged, useCurrentUser } from '@/lib/use-current-user';
 
 interface MyProfile {
   _id: string;
@@ -26,6 +26,11 @@ interface MyProfile {
   successfulSales: number;
   successfulPurchases: number;
   createdAt: string;
+  /**
+   * Consentement marketing. Absent tant que la colonne n'a jamais été
+   * renseignée : on ne traite pas l'absence comme un accord.
+   */
+  marketing?: { optedIn: boolean; updatedAt?: string };
 }
 
 const PLACEHOLDER_AVATAR = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
@@ -45,6 +50,41 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [newsletterBusy, setNewsletterBusy] = useState(false);
+
+  /**
+   * Bascule du consentement marketing.
+   *
+   * Volontairement hors du formulaire d'édition du profil : c'est une action
+   * immédiate et isolée, pas une donnée d'identité. Si elle dépendait du bouton
+   * « Enregistrer », un utilisateur qui n'ouvre jamais l'édition ne pourrait
+   * jamais se désinscrire — ce qui est le pire endroit possible pour loger la
+   * seule sortie légale du dispositif.
+   */
+  async function toggleNewsletter() {
+    if (!profile) return;
+    const next = !profile.marketing?.optedIn;
+    setNewsletterBusy(true);
+    setError('');
+    setSuccess('');
+    try {
+      const { user: updated } = await apiFetch<{ user: MyProfile }>('/api/v1/users/me', {
+        method: 'PATCH',
+        json: { marketingOptIn: next },
+      });
+      setProfile(updated);
+      setSuccess(
+        next
+          ? 'Newsletter activée — vous recevrez les 5 comptes les plus consultés.'
+          : 'Newsletter désactivée. Vos emails de compte ne sont pas concernés.',
+      );
+      notifyAuthChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setNewsletterBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -275,7 +315,42 @@ export default function ProfilePage() {
             ) : null}
           </div>
         )}
-      </main>
+
+        {profile && (
+          <div className="mt-6 rounded-ticket border border-white/10 bg-navy p-5">
+            <h2 className="font-display text-lg text-bone">Notifications et emails</h2>
+            <p className="mt-1 text-xs text-bone/40">
+              Ces emails de compte sont obligatoires et ne peuvent pas être
+              désactivés.
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 pt-4">
+              <div>
+                <p className="text-sm font-medium text-bone/80">
+                  Newsletter — les 5 comptes les plus consultés
+                </p>
+                <p className="mt-0.5 text-xs text-bone/40">
+                  {profile.marketing?.optedIn
+                    ? 'Inscrit. Vous pouvez vous désinscrire à tout moment, ici ou en un clic depuis n’importe quel email.'
+                    : 'Non inscrit. Vous ne recevrez aucun email de découverte.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleNewsletter}
+                disabled={newsletterBusy}
+                className="rounded-full border border-white/15 px-4 py-2 text-xs text-bone/70 hover:border-white/30 disabled:opacity-50"
+              >
+                {newsletterBusy
+                  ? 'Enregistrement…'
+                  : profile.marketing?.optedIn
+                    ? 'Se désinscrire'
+                    : 'S’inscrire'}
+              </button>
+            </div>
+          </div>
+        )}
+        </main>
       <SiteFooter />
     </>
   );

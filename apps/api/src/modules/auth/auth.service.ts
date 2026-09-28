@@ -12,6 +12,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { AffiliateAttributionService } from '../affiliates/affiliate-attribution.service.js';
 import { EmailService } from '../../lib/email/email.service.js';
 import { checkEmailDomain } from '../../lib/email/email-deliverability.js';
+import { buildOptInState } from '../newsletter/marketing-consent.service.js';
 import { logger } from '../../lib/logger.js';
 import { env } from '../../config/env.js';
 
@@ -76,7 +77,21 @@ export class AuthService {
       country: country.code,
       currency: country.currency,
       roles: [UserRole.USER],
+      // Consentement marketing demandé explicitement dans le formulaire.
+      // Le token n'est écrit que si la case a été cochée — voir
+      // MarketingConsentService.
+      marketing: buildOptInState(input.marketingOptIn),
     });
+
+    if (input.marketingOptIn) {
+      await AuditService.log({
+        actor: String(user._id),
+        action: 'user.marketing_opted_in',
+        entityType: 'User',
+        entityId: String(user._id),
+        metadata: { source: 'register' },
+      });
+    }
 
     await AuditService.log({
       actor: String(user._id),

@@ -23,6 +23,13 @@ export const registerSchema = z.object({
   // Optionnel: sessionId de tracking affilié, pour rattacher une
   // attribution existante au compte fraîchement créé (§9).
   sessionId: z.string().optional(),
+  // Consentement à la newsletter (emails commerciaux).
+  //
+  // `default(false)` est une décision volontaire et pas un simple confort de
+  // typage : une case non cochée ne doit jamais produire un consentement. Le
+  // booléen est donc obligatoire dans le type, et `undefined` ne peut pas
+  // transiter jusqu'à la base. Voir `marketing` dans user.model.ts.
+  marketingOptIn: z.boolean().default(false),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 

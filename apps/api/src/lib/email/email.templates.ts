@@ -94,7 +94,34 @@ function cta(url: string, label: string): string {
       </div>`;
 }
 
-function wrap(title: string, bodyHtml: string): string {
+/**
+ * Pied de page commun.
+ *
+ * `unsubscribeUrl` n'est fourni QUE par les emails commerciaux. Le mettre par
+ * defaut serait un defaut a la fois legal et pratique : un lien de
+ * desinscription sur un email de confirmation de paiement ou de litige donne
+ * au lecteur une raison de se désabonner d'alertes qu'il veut justement
+ * recevoir, et le client mail enverrait un signal de désinscription alors que
+ * le transactional reste parfaitement sollicité.
+ */
+function footerHtml(unsubscribeUrl?: string): string {
+  const unsubscribe =
+    unsubscribeUrl !== undefined
+      ? `<p style="margin:12px 0 0;">
+           <a href="${unsubscribeUrl}" style="color:${GOLD_INK};">Se desinscrire de la newsletter</a>
+         </p>
+         <p style="margin:4px 0 0;font-size:11px;">
+           Vous ne recevrez plus les selections de comptes. Les emails lies a votre compte
+           (paiements, litiges, securite) continuent de vous etre envoyes.
+         </p>`
+      : '';
+
+  return `<p style="margin:0 0 6px;">Gaming Marketplace &mdash; ${APP_URL.replace(/^https?:\/\//, '')}</p>
+        <p style="margin:0;">Une question ? <a href="mailto:${SUPPORT_EMAIL}" style="color:${GOLD_INK};">${SUPPORT_EMAIL}</a></p>
+        ${unsubscribe}`;
+}
+
+function wrap(title: string, bodyHtml: string, options?: { unsubscribeUrl?: string }): string {
   return `<!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -110,8 +137,7 @@ function wrap(title: string, bodyHtml: string): string {
         ${bodyHtml}
       </div>
       <div style="${FOOTER_STYLE}">
-        <p style="margin:0 0 6px;">Gaming Marketplace &mdash; ${APP_URL.replace(/^https?:\/\//, '')}</p>
-        <p style="margin:0;">Une question ? <a href="mailto:${SUPPORT_EMAIL}" style="color:${GOLD_INK};">${SUPPORT_EMAIL}</a></p>
+        ${footerHtml(options?.unsubscribeUrl)}
       </div>
     </div>
   </div>
@@ -445,5 +471,92 @@ export const emailTemplates = {
       ${isApproved ? cta(`${APP_URL}/dashboard/seller/listings/new`, 'Publier une annonce') : ''}
     `;
     return { subject: isApproved ? 'Compte vendeur vérifié' : 'Demande vendeur rejetée', html: wrap(isApproved ? 'Vendeur vérifié' : 'Demande vendeur', body) };
+  },
+
+  /**
+   * Newsletter : les 5 comptes les plus consultes de la periode.
+   *
+   * Seul template commercial du lot, et le seul a recevoir un lien de
+   * desinscription. Le sujet reprend le nom de la marque, sans « promo » ni
+   * « urgent » : un sujet qui clamait la promotion ferait classer l'email en
+   * indesirable chez Gmail, et un rate d'ouverture nul sur une liste ou le
+   * tri des indesirables est la premiere cause de mort d'une adresse
+   * d'expedition.
+   *
+   * `listings` est vide uniquement si la selection n'a rien donne ; le service
+   * n'envoie alors pas d'email du tout, mais le template le gere proprement
+   * plutot que de produire une page vide.
+   */
+  weeklyTopListings(params: {
+    firstName: string;
+    listings: Array<{
+      title: string;
+      slug: string;
+      price: string;
+      currency: string;
+      gameName: string;
+      gameSlug: string;
+      country: string;
+    }>;
+    unsubscribeUrl: string;
+  }) {
+    const firstName = escapeHtml(params.firstName);
+
+    if (params.listings.length === 0) {
+      const body = `
+        <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+        <p style="${MUTED_STYLE}">Aucun nouveau compte n'a encore assez de visites cette semaine. On vous ecrira des que ca bouge.</p>
+        ${cta(MARKETPLACE_URL, 'Voir la marketplace')}
+      `;
+      return {
+        subject: 'Gaming Marketplace — pas encore de selection cette semaine',
+        html: wrap('La selection de la semaine', body, {
+          unsubscribeUrl: params.unsubscribeUrl,
+        }),
+      };
+    }
+
+    const items = params.listings
+      .map((l, i) => {
+        // Route reelle de detail : /marketplace/{gameSlug}/{listingSlug}.
+        // Le slug du jeu est indispensable — un lien vers `/marketplace/{slug}`
+        // ne.resoudrait aucune route et tomberait sur une 404. Si le jeu est
+        // manquant en base, on renvoie vers la racine de la marketplace plutot
+        // qu'un lien casse.
+        const url = l.gameSlug
+          ? `${APP_URL}/marketplace/${encodeURIComponent(l.gameSlug)}/${encodeURIComponent(l.slug)}`
+          : MARKETPLACE_URL;
+        return `
+        <tr>
+          <td style="padding:16px 0;border-bottom:1px solid ${BORDER};vertical-align:top;">
+            <div style="margin:0 0 6px;">
+              <span style="display:inline-block;background:${GOLD};color:${TEXT_STRONG};font-weight:700;font-size:13px;padding:2px 9px;border-radius:999px;margin-right:8px;">${i + 1}</span>
+              <a href="${url}" style="color:${TEXT_STRONG};font-weight:600;font-size:16px;text-decoration:none;">${escapeHtml(l.title)}</a>
+            </div>
+            <div style="color:${TEXT_MUTED};font-size:13px;margin:0 0 8px;">${escapeHtml(l.gameName)}${l.country ? ` &middot; ${escapeHtml(l.country)}` : ''}</div>
+            <div style="color:${TEXT_STRONG};font-weight:600;font-size:15px;margin:0;">${escapeHtml(l.price)} ${escapeHtml(l.currency)}</div>
+          </td>
+        </tr>`;
+      })
+      .join('');
+
+    const body = `
+      <p style="margin:0 0 16px;">Bonjour <strong>${firstName}</strong>,</p>
+      <p style="margin:0 0 20px;">
+        Voici les ${params.listings.length} comptes les plus consultes sur la marketplace cette
+        periode. Ce sont eux qui attirent l&apos;attention des acheteurs, alors c&apos;est
+        probablement le moment de les jetter un oeil.
+      </p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${items}
+      </table>
+      ${cta(MARKETPLACE_URL, 'Explorer tous les comptes')}
+      <p style="${MUTED_STYLE}margin-top:24px;">Vous avez vous-meme une annonce ? La publier est gratuit et elle peut compter dans la selection.</p>
+    `;
+    return {
+      subject: `${params.listings.length} comptes les plus consultes — Gaming Marketplace`,
+      html: wrap('La selection de la semaine', body, {
+        unsubscribeUrl: params.unsubscribeUrl,
+      }),
+    };
   },
 };

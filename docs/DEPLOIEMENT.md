@@ -219,11 +219,65 @@ Deux points de vigilance sur `_dmarc` :
 - Contrat de code : un échec d'envoi remonte (`email.service.ts` ne l'avale
   plus) et chaque email porte un `tag` de catégorie, ce qui permet de filtrer
   les envois par type dans le dashboard Resend.
+- **La newsletter est le seul email commercial du système**, et le seul à porter
+  `List-Unsubscribe` + `List-Unsubscribe-Post`. Les transactionnels ne doivent
+  jamais en porter : ce serait proposer de se désabonner d'un email de
+  confirmation de paiement, ce que le parcours ne permet pas.
 
-Pas de `List-Unsubscribe` ici : tous nos emails sont transactionnels
-(confirmation, paiement, modération) et l'option s'y opposerait à une
-désinscription qui casserait le parcours. L'en-tête est réservé au cas où une
-campagne commerciale serait ajoutée.
+Les destinataires sont de plus filtrés à l'envoi : consentement explicite,
+email vérifié, compte `ACTIVE`, jeton de désinscription présent. Une
+inscription via Google reste désinscrite par défaut, faute de consentement
+explicite.
+
+**Ce que le système ne fait pas :** aucun webhook de bounce ni de plainte
+n'est consommé. L'API d'envoi de Resend ne renvoie que l'acceptation, pas la
+délivrabilité finale ; une adresse qui bounce reste donc dans la liste et
+abîmera le score d'expéditeur. À brancher en priorité si le volume de
+désinscriptions spontanées devient visible dans Resend.
+
+### 3.3 Newsletter : cron externe
+
+La newsletter n'est **pas** déclenchée par l'API elle-même (le plan gratuit
+dormant rend un cron interne imprévisible). Un service externe — par exemple
+[cron-job.org](https://cron-job.org) — appelle :
+
+```
+POST https://<api>/api/v1/internal/newsletter/send
+x-cron-secret: <CRON_SECRET>
+```
+
+Réglages côté cron-job : **toutes les 4 minutes, peu importe.** C'est le
+planificateur qui n'a aucun réglage à faire — c'est lui qui est le moins
+capable, et il ne doit pas avoir à porter la règle.
+
+**Le jour de la semaine se décide dans l'API, via `NEWSLETTER_DAYS`**, et pas
+dans cron-job.org : l'offre gratuite n'expose que des fréquences (« toutes les
+4 minutes »), sans sélecteur de jour. Une liste de jours ISO séparés par des
+virgules, `1 = lundi … 7 = dimanche` :
+
+| Valeur | Cadence |
+| --- | --- |
+| `2` (défaut) | mardi — un envoi par semaine |
+| `2,5` | mardi et vendredi — deux envois par semaine |
+| `1,4` | lundi et jeudi |
+
+**Commencer à `2`** (un envoi par semaine), mesurer les taux de bounce et de
+plainte sur un mois, puis passer à `2,5`. Passer à deux envois d'un coup sur une
+liste non éprouvée est la manière la plus rapide de se faire classer en spam.
+
+L'idempotence assure le reste : la clé `YYYY-Www-<jour ISO>` fait que le
+premier appel de la journée envoie et que tous les suivants répondent « déjà
+envoyé » sans rien faire. Un jour non programmé ne crée **aucune** campagne, donc
+la seule tentative de la journée reste disponible.
+
+`CRON_SECRET` est obligatoire en production : sans lui, l'endpoint répond **503**
+et la newsletter n'est jamais envoyée — c'est le comportement voulu, pas un bug.
+
+Le back-office (`/newsletter` dans l'admin) affiche l'historique, l'aperçu de la
+sélection en cours et permet un envoi de test à une adresse consentante. Il n'y
+a volontairement **pas** de bouton « envoyer à toute la liste » : la cadence se
+change dans `NEWSLETTER_DAYS`, donc par une modification de configuration
+explicite et tracée, et non par un double-clic.
 
 ## 4. Secrets
 

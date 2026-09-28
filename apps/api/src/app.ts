@@ -29,6 +29,8 @@ import { messagingRouter } from './modules/messaging/messaging.routes.js';
 import { adminMessagesRouter } from './modules/messaging/admin-messages.routes.js';
 import { blogRouter } from './modules/blog/blog.routes.js';
 import { adminBlogRouter } from './modules/blog/admin-blog.routes.js';
+import { unsubscribeRouter } from './modules/newsletter/unsubscribe.routes.js';
+import { internalNewsletterRouter } from './modules/newsletter/newsletter.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -94,6 +96,17 @@ export function createApp(): Express {
   app.use('/api/v1/blog', blogRouter);
   app.use('/api/v1/admin', adminMessagesRouter);
   app.use('/api/v1/admin', adminBlogRouter);
+
+  // Newsletter. Les deux routeurs sont montes volontairement en dehors
+  // d'adminRouter et sans requireAuth, pour deux raisons distinctes :
+  //  - `unsubscribeRouter` est appelé directement par les clients mail au titre
+  //    de la RFC 8058 (bouton « Se désabonner »), sans cookie de session.
+  //  - `internalNewsletterRouter` est appelé par un cron externe, serveur à
+  //    serveur, et s'authentifie par un secret en en-tête.
+  // csrfGuard les laisse passer : le client mail n'envoie pas d'Origin, et le
+  // cron non plus. C'est le comportement documenté de csrfGuard.
+  app.use('/api/v1/unsubscribe', unsubscribeRouter);
+  app.use('/api/v1/internal/newsletter', internalNewsletterRouter);
 
   app.use(errorHandlerMiddleware);
 

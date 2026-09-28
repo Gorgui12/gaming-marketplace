@@ -13,5 +13,12 @@ export const updateProfileSchema = z.object({
     .optional(),
   country: z.string().length(2).optional(),
   currency: z.string().length(3).optional(),
+  // Bascule du consentement à la newsletter depuis la page préférences.
+  //
+  // `optional()` (et non `.default(false)` contrairement à l'inscription) :
+  // ici un champ absent signifie « ne change rien ». Avec un défaut, un PUT
+  // du profil qui n’envoyerait que le nom désinscrirait silencieusement tout
+  // le monde.
+  marketingOptIn: z.boolean().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

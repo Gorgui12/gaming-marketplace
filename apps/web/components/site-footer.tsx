@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { NewsletterSignup } from './newsletter-signup';
 
 export function SiteFooter() {
   return (
@@ -29,6 +30,9 @@ export function SiteFooter() {
                   </Link>
                 </li>
               </ul>
+            </div>
+            <div>
+              <NewsletterSignup />
             </div>
             <div>
               <p className="mb-2 font-medium text-bone/70">Réseaux sociaux</p>

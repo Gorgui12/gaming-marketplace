@@ -64,6 +64,59 @@ const envSchema = z.object({
     .email('RESEND_REPLY_TO doit être une adresse email valide')
     .default('support@gamingmarket.store'),
 
+  // --- Newsletter (emails commerciaux) ---
+  //
+  // `CRON_SECRET` protège l'endpoint d'envoi. Le service de cron externe
+  // (cron-job.org) l'envoie en en-tête `x-cron-secret` : impossible de le
+  // deviner, et il n'est pas dans l'URL comme le serait une query string
+  // (qui finit dans tous les logs d'accès et dans l'historique du navigateur).
+  //
+  // Sans valeur, la route refuse tout appel : c'est volontairement bloquant
+  // en production plutôt que silencieusement ouvert. « Je n'ai pas configuré
+  // de newsletter » ne doit pas se traduire par « l'endpoint d'envoi est
+  // accessible à quiconque tombe sur l'URL ».
+  CRON_SECRET: z.string().min(16, 'CRON_SECRET doit faire au moins 16 caractères').optional(),
+
+  /**
+   * Nombre minimal de vues pour qu'une annonce puisse figurer dans la
+   * sélection.
+   *
+   * `views` est gonflable (incrémenté à chaque affichage de la page, sans
+   * session ni déduplication), donc un classement brut récompense la
+   * manipulation : il suffit de recharger sa page pour passer devant tout le
+   * monde. Un seuil rend la triche coûteuse — il faut générer autant de
+   * visites que le seuil, pour une seule place dans le top 5.
+   */
+  NEWSLETTER_MIN_VIEWS: z.coerce.number().int().min(0).default(20),
+
+  /**
+   * Fenêtre de fraîcheur de la sélection, en jours.
+   *
+   * Doit rester inférieure à l'écart entre deux envois : avec une fenêtre de
+   * 7 jours et deux envois hebdomadaires, la même annonce apparaît en moyenne
+   * dans les deux emails de la même semaine. Une fenêtre de 3 jours laisse un
+   * angle mort entre les deux envois.
+   */
+  NEWSLETTER_WINDOW_DAYS: z.coerce.number().int().min(1).max(30).default(3),
+
+  /**
+   * Jours de la semaine où la newsletter part, en jours ISO.
+   *
+   * 1 = lundi … 7 = dimanche. Valeur par défaut : mardi (2), soit un envoi
+   * par semaine.
+   *
+   * Pourquoi cette variable existe, alors que la planification pourrait se
+   * faire dans cron-job.org : tous les planificateurs gratuits n'offrent pas de
+   * sélecteur de jour de la semaine, seulement une fréquence ("toutes les 4
+   * minutes"). Placer la règle ici permet de laisser le cron sonner aussi
+   * souvent qu'il veut — c'est l'API qui décide si aujourd'hui est un jour
+   * d'envoi, et l'idempotence absorbe le reste.
+   *
+   * Format : liste de 1 à 7, séparée par des virgules, sans espaces.
+   * `2,5` = mardi et vendredi, soit deux envois par semaine.
+   */
+  NEWSLETTER_DAYS: z.string().default('2'),
+
   GOOGLE_CLIENT_ID: z.string().optional(),
 
   CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
@@ -110,7 +163,42 @@ const envSchema = z.object({
       message: 'PAYMENT_PROVIDER=unitechpay exige UNITECHPAY_API_KEY',
     });
   }
+
+  // Une valeur invalide ne doit pas démarrer en silence puis réduire la
+  // cadence à zéro (« aucun jour ne correspond ») : l'optima serait de ne
+  // jamais envoyer, et rien ne le signalerait.
+  const days = parseNewsletterDays(val.NEWSLETTER_DAYS);
+  if (days === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['NEWSLETTER_DAYS'],
+      message:
+        'NEWSLETTER_DAYS doit être une liste de jours ISO (1=lundi … 7=dimanche) séparés par des virgules, par exemple « 2» ou « 2,5»',
+    });
+  }
 });
+
+/**
+ * Parse `NEWSLETTER_DAYS` en tableau de jours ISO.
+ *
+ * Renvoie `null` si la valeur est inexploitable, ce qui permet à `superRefine`
+ * de la signaler au démarrage plutôt que de la laisser produire une cadence
+ * nulle. Doublons ignorés, ordre conservé — un `5,2,5` reste deux envois.
+ */
+function parseNewsletterDays(raw: string): number[] | null {
+  const parts = raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p !== '');
+  if (parts.length === 0) return null;
+  const days: number[] = [];
+  for (const part of parts) {
+    const n = Number(part);
+    if (!Number.isInteger(n) || n < 1 || n > 7) return null;
+    if (!days.includes(n)) days.push(n);
+  }
+  return days;
+}
 
 // Le schéma rend les clés de chaque provider optionnelles en base pour ne
 // pas bloquer le démarrage quand l'autre provider est actif. La validation
@@ -148,5 +236,14 @@ function loadEnv(): Env {
 }
 
 export const env = loadEnv();
+
+/**
+ * Jours d'envoi effectifs, en jours ISO (1 = lundi … 7 = dimanche).
+ *
+ * Déclaré après `env` : la valeur en dépend. Validée au démarrage par
+ * `superRefine`, donc une valeur mal formée empêche de démarrer plutôt que de
+ * produire silencieusement une cadence nulle.
+ */
+export const newsletterDays: number[] = parseNewsletterDays(env.NEWSLETTER_DAYS) ?? [];
 
 export const corsAllowedOrigins = env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim());

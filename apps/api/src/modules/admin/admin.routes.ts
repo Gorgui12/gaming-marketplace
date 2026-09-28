@@ -18,6 +18,11 @@ import {
 import { listAdminDisputes, resolveAdminDispute } from './admin-disputes.controller.js';
 import { listAdminTransactions } from './admin-transactions.controller.js';
 import { getEmailStatus, testEmail } from './admin-email.controller.js';
+import {
+  listCampaigns,
+  previewCampaign,
+  sendTestNewsletter,
+} from './admin-newsletter.controller.js';
 
 export const adminRouter = Router();
 
@@ -41,6 +46,11 @@ adminRouter.post('/disputes/:id/resolve', resolveAdminDispute);
 
 // Transactions
 adminRouter.get('/transactions', listAdminTransactions);
+
+// Newsletter
+adminRouter.get('/newsletter/history', listCampaigns);
+adminRouter.get('/newsletter/preview', previewCampaign);
+adminRouter.post('/newsletter/test', sendTestNewsletter);
 
 // Maintenance base de données
 adminRouter.get('/db', getDbStats);

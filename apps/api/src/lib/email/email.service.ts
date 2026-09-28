@@ -34,8 +34,14 @@ export class EmailService {
    *   « répondez à cet email » présent dans plusieurs templates.
    * - `tags` : permet de filtrer les envois par type dans le dashboard
    *   Resend.
+   * - `headers` : réservé aux en-tetes RFC 8058 de la newsletter
+   *   (`List-Unsubscribe`). Volontairement absent des envois transactionnels :
+   *   un lien de desinscription sur un email de paiement donnerait au lecteur
+   *   une raison de se desabonner d'alertes qu'il veut justement recevoir, et
+   *   le client mail enverrait un signal de desinscription alors que le
+   *   transactional reste parfaitement sollicite.
    *
-   * Laisse la rejection remonter : les 18 appelants sont tous en
+   * Laisse la rejection remonter : les appelants sont tous en
    * fire-and-forget avec leur propre `.catch()`, qui était jusque-là du
    * code mort puisque cette méthode avalait tout en interne. Un échec
    * d'envoi doit donc rester observable.
@@ -45,6 +51,7 @@ export class EmailService {
     subject: string,
     html: string,
     tag: string,
+    headers?: Record<string, string>,
   ): Promise<void> {
     const from = normalizeFrom(env.RESEND_FROM);
     try {
@@ -56,6 +63,7 @@ export class EmailService {
         text: htmlToText(html),
         replyTo: env.RESEND_REPLY_TO,
         tags: [{ name: 'categorie', value: tag }],
+        ...(headers ? { headers } : {}),
       });
       if (error) {
         throw new Error(error.message);
@@ -304,5 +312,39 @@ export class EmailService {
   }) {
     const { subject, html } = emailTemplates.sellerStatusChanged(params);
     await this.send(params.to, subject, html, 'seller-status');
+  }
+
+  /**
+   * Newsletter : selection des comptes les plus consultes.
+   *
+   * Seul envoi commercial du systeme, et seul appelant de `headers`. Les deux
+   * en-tetes vont de pair et ne doivent jamais etre separes : Gmail et Yahoo
+   * n'affichent le bouton "Se desabonner" que si les deux sont presents
+   * (RFC 8058), et un `List-Unsubscribe` seul sans en-tete `Post` est ignore
+   * par plusieurs clients.
+   *
+   * Le `<...>` autour de l'URL n'est pas un artifice de template : c'est la
+   * forme multiple imposee par la RFC 2369, qui autorise plusieurs adresses
+   * dans un meme en-tete.
+   */
+  static async sendWeeklyTopListings(params: {
+    to: string;
+    firstName: string;
+    listings: Array<{
+      title: string;
+      slug: string;
+      price: string;
+      currency: string;
+      gameName: string;
+      gameSlug: string;
+      country: string;
+    }>;
+    unsubscribeUrl: string;
+  }) {
+    const { subject, html } = emailTemplates.weeklyTopListings(params);
+    await this.send(params.to, subject, html, 'newsletter', {
+      'List-Unsubscribe': `<${params.unsubscribeUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
   }
 }

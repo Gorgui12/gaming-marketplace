@@ -30,6 +30,11 @@ export default function RegisterPage() {
     lastName: '',
     username: '',
     country: 'SN',
+    // Décochée par défaut, volontairement : une case pré-cochée ne vaut pas
+    // consentement. Le GDPR comme la CNDP considers qu'un consentement
+    // présumé est un consentement invalide, et c'est ce que sanctionne le
+    // premier audit.
+    marketingOptIn: false,
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loadingSubmit, setLoadingSubmit] = useState(false);
@@ -41,7 +46,9 @@ export default function RegisterPage() {
     deliverable: boolean | null;
   }>({ suggestion: null, deliverable: null });
 
-  function update<K extends keyof typeof form>(key: K, value: string) {
+  // `value` est typé d'après la clé : `marketingOptIn` est un booléen, pas une
+  // chaîne, et un `value: string` forcerait un cast mensonger à l'appel.
+  function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (key === 'email') {
       setEmailHint({ suggestion: null, deliverable: null });
@@ -304,6 +311,20 @@ export default function RegisterPage() {
               </option>
             ))}
           </select>
+
+          <label className="flex cursor-pointer items-start gap-2.5 text-xs text-bone/60">
+            <input
+              type="checkbox"
+              checked={form.marketingOptIn}
+              onChange={(e) => update('marketingOptIn', e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-gold"
+            />
+            <span>
+              Recevoir la newsletter : les 5 comptes les plus consultés sur la
+              marketplace, une fois par semaine. Désinscription en un clic depuis
+              n&apos;importe quel email.
+            </span>
+          </label>
 
           <button
             type="submit"

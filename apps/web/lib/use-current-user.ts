@@ -12,6 +12,13 @@ interface CurrentUser {
    * qui bloque), ce n'est qu'un signal d'interface.
    */
   emailVerified: boolean;
+  /**
+   * Consentement marketing. Optionnel car `/auth/me` ne renvoie ce bloc que
+   * pour les comptes ayant déjà la colonne renseignée ; l'absence vaut
+   * « pas inscrit », jamais « inscrit » — on ne veut pas afficher une case
+   * cochée par défaut à quelqu'un qui ne l'a jamais demandé.
+   */
+  marketing?: { optedIn: boolean };
 }
 
 // Événement global : permet à toutes les instances montées de useCurrentUser

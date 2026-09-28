@@ -4,6 +4,7 @@ import { asyncHandler } from '../../lib/async-handler.js';
 import { AppError } from '../../lib/errors/app-error.js';
 import { ErrorCode } from '../../lib/errors/error-codes.js';
 import { UserModel } from './user.model.js';
+import { MarketingConsentService } from '../newsletter/marketing-consent.service.js';
 
 // Jamais d'email, de téléphone ni de données sensibles dans le profil
 // public d'un tiers — mais ces champs sont évidemment visibles pour le
@@ -56,5 +57,19 @@ export const updateMe = asyncHandler(async (req: Request, res: Response) => {
     throw AppError.notFound(ErrorCode.NOT_FOUND, 'Utilisateur introuvable');
   }
 
-  res.status(200).json({ success: true, data: { user } });
+  // Le consentement marketing est traité à part, et APRÈS le reste : c'est le
+  // seul champ dont l'écriture produit un token, il lui faut donc le chemin
+  // de MarketingConsentService plutôt qu'un `$set` dans le dictionnaire
+  // ci-dessus. `input.marketingOptIn !== undefined` distingue un choix
+  // explicite de l'absence du champ, qui doit laisser l'état intact.
+  if (input.marketingOptIn !== undefined) {
+    await MarketingConsentService.setOptIn(req.user!.id, input.marketingOptIn, 'profile');
+  }
+
+  const fresh = await UserModel.findById(req.user!.id);
+  if (!fresh) {
+    throw AppError.notFound(ErrorCode.NOT_FOUND, 'Utilisateur introuvable');
+  }
+
+  res.status(200).json({ success: true, data: { user: fresh } });
 });
