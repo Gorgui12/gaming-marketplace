@@ -162,8 +162,45 @@ export interface BroadcastInput {
   html: string;
   kind: BroadcastKind;
   initiatedBy: string;
-  /** Destinataires forcés — réservé aux tests. */
+  /**
+   * Destinataires forcés — réservé aux tests.
+   */
   recipientsOverride?: BroadcastRecipient[];
+  /**
+   * Passe-droit pour un envoi au-delà de `ADMIN_EMAIL_BULK_THRESHOLD`.
+   *
+   * L'admin ne le pose pas spontanément : la première requête est refusée avec
+   * le nombre exact de destinataires, et l'interface le redemande après avoir
+   * affiché ce nombre. Voir le garde-fou dans `startBroadcast`.
+   */
+  confirmedLargeSend?: boolean;
+}
+
+/**
+ * Contexte factice pour l'aperçu et le test.
+ *
+ * Valeurs volontairement plausibles et cohérentes entre elles — prénom et nom
+ * qui vont ensemble, un pays et sa devise (`SN`/`XOF`) — parce que l'admin juge
+ * de la mise en page à partir de ce qu'il voit : un `{{currency}}` rendu « EUR »
+ * sous une adresse sénégalaise trahirait un template mal thoughté, alors que la
+ * valeur exacte n'a aucun importance fonctionnelle.
+ */
+export function sampleContext(
+  to: string,
+  unsubscribeUrl?: string,
+): Record<TemplateVariable, string> {
+  return {
+    firstName: 'Awa',
+    lastName: 'Diop',
+    email: to,
+    username: 'awa.diop',
+    country: 'SN',
+    currency: 'XOF',
+    // L'URL de substitution n'est jamais cliquable en pratique — elle sert
+    // seulement à vérifier que la variable tombe au bon endroit et que le lien
+    // produit ressemble à un vrai lien de désinscription.
+    unsubscribeUrl: unsubscribeUrl ?? 'https://exemple.test/desinscription',
+  };
 }
 
 /**
@@ -209,6 +246,23 @@ export async function startBroadcast(input: BroadcastInput): Promise<{
       ErrorCode.VALIDATION_ERROR,
       'Aucun destinataire ne correspond à ce type d\'envoi. Rien à envoyer.',
       400,
+    );
+  }
+
+  // Confirmation en deux temps au-delà du seuil. Le nombre est résolu ICI,
+  // donc il est exact : c'est lui que l'interface affiche avant de demander
+  // la confirmation, et non un ordre de grandeur. Refuser puis renvoyer avec
+  // `confirmedLargeSend` est plus robuste qu'un `window.confirm` côté front,
+  // qui n'empêcherait pas un appel direct à l'API.
+  if (
+    !input.confirmedLargeSend &&
+    input.recipientsOverride === undefined &&
+    recipients.length >= env.ADMIN_EMAIL_BULK_THRESHOLD
+  ) {
+    throw new AppError(
+      ErrorCode.VALIDATION_ERROR,
+      `Envoi de masse : ${recipients.length} destinataires. Un email parti ne se rattrape pas — relancez la requête avec \`confirmedLargeSend: true\` après avoir vérifié le nombre et l'aperçu.`,
+      409,
     );
   }
 
@@ -331,17 +385,8 @@ export async function sendTestBroadcast(params: {
   }
 
   // Contexte factice : le test valide le RENDU, pas les données d'un
-  // destinataire réel. Les valeurs sont volontairement plausibles pour que
-  // l'admin repère une variable mal placée dans la mise en page.
-  const html = renderTemplate(sanitized, {
-    firstName: 'Awa',
-    lastName: 'Diop',
-    email: params.to,
-    username: 'awa.diop',
-    country: 'SN',
-    currency: 'XOF',
-    unsubscribeUrl: params.unsubscribeUrl ?? 'https://exemple.test/desinscription',
-  });
+  // destinataire réel.
+  const html = renderTemplate(sanitized, sampleContext(params.to, params.unsubscribeUrl));
 
   await EmailService.sendAdminBroadcast({
     to: params.to,
@@ -387,4 +432,36 @@ export async function reapStaleRuns(): Promise<number> {
 /** Rendu texte du HTML, pour l'aperçu texte de l'admin. */
 export function previewText(html: string): string {
   return htmlToText(sanitizeEmailHtml(html));
+}
+
+/**
+ * Aperçu du rendu final, sans envoi.
+ *
+ * Renvoie le HTML interpolé ET sa version texte, parce que ce sont deux
+ * rendus réellement distincts : le second est ce que voient les clients mail
+ * qui refusent ou n'affichent pas le HTML, et c'est souvent lui qui est cassé
+ * quand le premier a l'air correct. Un aperçu qui n'en montrait qu'un
+ * laisserait passer ce cas.
+ *
+ * Ne lève volontairement PAS sur un `COMMERCIAL` sans `{{unsubscribeUrl}}` :
+ * c'est un problème d'INTERFACE, pas d'envoi. L'admin doit pouvoir rédiger un
+ * template et le relire avant d'ajouter la variable — une validation qui bloque
+ * dès la frappe l'empêcherait simplement de voir son brouillon. Le problème
+ * est renvoyé dans `issues` pour être affiché, et `startBroadcast` refusera
+ * l'envoi plus tard.
+ */
+export function previewBroadcast(params: {
+  html: string;
+  kind: BroadcastKind;
+}): { html: string; text: string; issues: { unknown: string[]; missingUnsubscribe: boolean } } {
+  const sanitized = sanitizeEmailHtml(params.html);
+  const { unknown, missingUnsubscribe } = inspectVariables(sanitized, params.kind);
+  // L'adresse témoin n'apparaît dans aucun lien du corps : les seules URL
+  // possibles sont celles de l'admin lui-même, écrites à la main.
+  const rendered = renderTemplate(sanitized, sampleContext('awa.diop@exemple.test'));
+  return {
+    html: rendered,
+    text: htmlToText(rendered),
+    issues: { unknown, missingUnsubscribe },
+  };
 }
