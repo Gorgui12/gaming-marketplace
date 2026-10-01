@@ -176,7 +176,14 @@ const BADGE_TONES: Record<string, string> = {
   SUSPENDED: 'bg-coral/15 text-coral',
   FAILED: 'bg-coral/15 text-coral',
   OPEN: 'bg-coral/15 text-coral',
+  // Envois d'emails : `PARTIAL` est un envoi dont certains destinataires ont
+  // échoué. Ni vert ni rouge — le mot seul, en ambre, dit « à regarder » sans
+  // laisser croire que la campagne a entièrement réussi ni qu'elle a échoué.
+  PARTIAL: 'bg-gold/15 text-gold',
   // neutre / attente
+  RUNNING: 'bg-gold/15 text-gold',
+  COMMERCIAL: 'bg-gold/15 text-gold',
+  TRANSACTIONAL: 'bg-white/10 text-bone/60',
   ESCROW_ACTIVE: 'bg-gold/15 text-gold',
   SELLER_DELIVERED: 'bg-gold/15 text-gold',
   BUYER_REVIEWING: 'bg-gold/15 text-gold',

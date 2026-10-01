@@ -16,6 +16,7 @@ import {
   Database,
   ShieldAlert,
   Mail,
+  Send,
   LogOut,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: '/disputes', label: 'Litiges', icon: Scale },
   { href: '/users', label: 'Utilisateurs', icon: Users },
   { href: '/newsletter', label: 'Newsletter', icon: Mail },
+  { href: '/emails', label: 'Emails', icon: Send },
   { href: '/messages', label: 'Messages bloqués', icon: ShieldAlert },
   { href: '/blog', label: 'Blog', icon: Newspaper },
   { href: '/affiliates', label: 'Affiliés', icon: Users },

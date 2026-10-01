@@ -10,6 +10,7 @@ import {
   sendTestBroadcast,
   startBroadcast,
 } from '../../lib/email/email-broadcast.service.js';
+import { TEMPLATE_VARIABLES } from '../../lib/email/sanitize-email-html.js';
 import { AdminEmailSendModel } from './admin-email-send.model.js';
 import { AuditService } from '../audit/audit.service.js';
 import { env } from '../../config/env.js';
@@ -53,7 +54,19 @@ const composeSchema = z.object({
   kind: z.enum(['COMMERCIAL', 'TRANSACTIONAL']),
 });
 
-const previewSchema = composeSchema;
+/**
+ * Schéma de l'aperçu : le corps seul.
+ *
+ * L'objet est délibérément absent. Il n'entre dans aucun calcul du rendu, et
+ * l'exiger ici produirait une erreur dès la première lettre du corps tapée —
+ * l'interface écrit le HTML avant l'objet, et un message « l'objet est
+ * obligatoire » au milieu de la rédaction fait croire à un bug. L'objet reste
+ * obligatoire pour l'envoi, où il est réellement envoyé.
+ */
+const previewSchema = z.object({
+  html: z.string().max(200_000, 'Corps trop volumineux (200 Ko maximum)'),
+  kind: z.enum(['COMMERCIAL', 'TRANSACTIONAL']),
+});
 
 const testBroadcastSchema = composeSchema.extend({
   to: z.string().email('Adresse email invalide'),
@@ -111,6 +124,16 @@ export const countRecipients = asyncHandler(async (req: Request, res: Response) 
       // au front pour que le seuil affiché soit celui réellement appliqué, et
       // non une valeur recopiée qui divergerait un jour.
       bulkThreshold: env.ADMIN_EMAIL_BULK_THRESHOLD,
+      // Liste des variables insérables, dans la même réponse que le reste du
+      // contexte de rédaction. Elle voyage avec le chargement de page pour que
+      // le composeur propose ses variables AVANT la première lettre tapée : les
+      // faire dépendre d'un aperçu obligerait à écrire du HTML pour découvrir
+      // ce qu'on peut écrire dedans.
+      //
+      // C'est l'API qui fait foi. Une liste recopiée dans le front divergerait
+      // au premier ajout de variable, et le composeur proposerait alors un
+      // `{{…}}` que l'envoi refuse.
+      variables: TEMPLATE_VARIABLES,
     },
   });
 });
