@@ -1,5 +1,5 @@
-import { UserModel } from '../users/user.model.js';
-import { AdminEmailSendModel } from '../modules/admin/admin-email-send.model.js';
+import { UserModel } from '../../modules/users/user.model.js';
+import { AdminEmailSendModel } from '../../modules/admin/admin-email-send.model.js';
 import { EmailService } from './email.service.js';
 import { htmlToText } from './html-to-text.js';
 import {
@@ -9,7 +9,7 @@ import {
   TEMPLATE_VARIABLES,
   type TemplateVariable,
 } from './sanitize-email-html.js';
-import { MarketingConsentService } from '../modules/newsletter/marketing-consent.service.js';
+import { MarketingConsentService } from '../../modules/newsletter/marketing-consent.service.js';
 import { AppError } from '../errors/app-error.js';
 import { ErrorCode } from '../errors/error-codes.js';
 import { env } from '../../config/env.js';

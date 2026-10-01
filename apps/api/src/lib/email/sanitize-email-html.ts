@@ -127,7 +127,10 @@ export function extractVariables(html: string): string[] {
   const rx = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g;
   let m: RegExpExecArray | null;
   while ((m = rx.exec(html)) !== null) {
-    found.add(m[1]);
+    // `noUncheckedIndexedAccess` rend `m[1]` optionnel : le groupe existe
+    // nécessairement (il est le cœur du motif), mais le type ne le sait pas.
+    // `if` documente cette invariant sans ajouter d'assertion.
+    if (m[1] !== undefined) found.add(m[1]);
   }
   return [...found];
 }
