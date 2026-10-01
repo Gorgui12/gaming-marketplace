@@ -116,6 +116,51 @@ describe('sanitizeEmailHtml', () => {
     expect(out).not.toMatch(/<script/i);
     expect(out).not.toMatch(/onerror/i);
   });
+
+  it('conserve charset et viewport, sans quoi le mail est illisible', () => {
+    // `charset` absent : Outlook (moteur Word) lit les accents en latin-1.
+    // `viewport` absent : un telephone rend dans une fenetre de 980 px, donc
+    // un email de 600 px s'affiche a un tiers de sa taille.
+    const out = sanitizeEmailHtml(
+      '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><p>Accents : éàçù</p>',
+    );
+    expect(out).toContain('<meta charset="utf-8">');
+    expect(out).toContain('name="viewport"');
+    expect(out).toContain('éàçù');
+  });
+
+  it('conserve plusieurs meta sans les confondre entre eux', () => {
+    const out = sanitizeEmailHtml(
+      '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>',
+    );
+    expect(out.match(/<meta/g)).toHaveLength(2);
+  });
+
+  it('retire un meta qui fait autre chose que declarer', () => {
+    // `<meta http-equiv="refresh">` est une redirection : c'est un vecteur,
+    // pas une declaration, et la liste blanche ne l'ouvre pas.
+    expect(
+      sanitizeEmailHtml('<meta http-equiv="refresh" content="0;url=https://exemple.test">'),
+    ).not.toMatch(/meta/i);
+    expect(sanitizeEmailHtml('<meta name="robots" content="noindex">')).not.toMatch(/meta/i);
+  });
+
+  it('retire un charset Accompagne d\'un gestionnaire on*', () => {
+    // La liste blanche exige que la balise se termine juste apres `charset` ;
+    // un `onload` derriere ne matche donc pas, et la balise part entiere.
+    const out = sanitizeEmailHtml('<meta charset="utf-8" onload="alert(1)">');
+    expect(out).not.toMatch(/onload/i);
+    expect(out).not.toMatch(/meta/i);
+  });
+
+  it('ne touche pas a un texte qui ressemble a un sentinelle interne', () => {
+    // Le sentinelle de protection est delimite par NUL : du texte ordinaire
+    // qui y ressemble doit rester intact, sans quoi une variable ou une URL
+    // disparaîtrait du mail.
+    const out = sanitizeEmailHtml('<p>gm-meta-0 et \u0000gm-meta-9\u0000</p>');
+    expect(out).toContain('gm-meta-0');
+    expect(out).toContain('gm-meta-9');
+  });
 });
 
 describe('extractVariables', () => {

@@ -55,6 +55,29 @@ const STRIPPED_ELEMENTS = [
 const STRIPPED_ATTRIBUTES = ['srcdoc', 'formaction', 'xlink:href'] as const;
 
 /**
+ * Les deux `<meta>` qu'un email doit conserver, et lui seul.
+ *
+ * Ils ne sont pas dans la liste de straightforward des éléments à retirer,
+ * parce que les supprimer casse deux choses visibles :
+ *
+ *  - `charset` : Outlook, qui rend encore les emails avec le moteur Word,
+ *    ne lit pas l'encodage du MIME mais celui du document. Sans cette
+ *    déclaration, les accents arrivent en latin-1 : « é » s'affiche « Ã© ».
+ *  - `viewport` : sans lui, un téléphone rend le message dans une fenêtre de
+ *    980 px et zoome en arrière. Un email de 600 px s'affiche alors à environ
+ *    un tiers de sa taille, en illisible. C'est le défaut le plus visible de
+ *    tous ceux que peut causer cette fonction.
+ *
+ * Ce ne sont pas des instructions mais des DÉCLARATIONS : ni l'une ni l'autre
+ * ne déclenche quoi que ce soit. La liste reste donc fermée — `<meta
+ * http-equiv="refresh">`, qui est bien une redirection, ou un `content`
+ * arbitraire, ne passent pas. D'où une liste blanche explicite plutôt qu'une
+ * dérogation au nom « meta ».
+ */
+const SAFE_META =
+  /<meta\s+charset=["']?[a-zA-Z0-9_-]+["']?\s*\/?>|<meta\s+name=["']viewport["']\s+content=["'][^"']*["']\s*\/?>/gi;
+
+/**
  * Retire les éléments dangerous, leur contenu, et les attributs `on*` +
  * `srcdoc`/`base`.
  *
@@ -67,6 +90,18 @@ const STRIPPED_ATTRIBUTES = ['srcdoc', 'formaction', 'xlink:href'] as const;
  */
 export function sanitizeEmailHtml(html: string): string {
   let out = html;
+
+  // 0. Les `<meta>` sûrs sont mis à l'abri dans un sentinelle avant le
+  //    passage qui retire TOUS les `meta`. Un sentinelle et non un commentaire
+  //    HTML : l'étape 1 supprime les commentaires, quiLeanait le travail.
+  //    Le caractère NUL ne correspond à aucune balise ni à aucun attribut, donc
+  //    aucune étape intermédiaire ne peut l'abîmer — et contrairement à un
+  //    nombre nu, il ne peut pas se confondre avec du texte.
+  const safeMetas: string[] = [];
+  out = out.replace(SAFE_META, (match) => {
+    safeMetas.push(match);
+    return `\u0000gm-meta-${safeMetas.length - 1}\u0000`;
+  });
 
   // 1. Commentaires conditionnels et commentaires simples : `<!--[if mso]>…`
   //    contient du markup destine a Outlook, mais un commentaire peut
@@ -95,7 +130,16 @@ export function sanitizeEmailHtml(html: string): string {
   out = out.replace(/\son[a-z]{2,}\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
 
   for (const attr of STRIPPED_ATTRIBUTES) {
-    out = out.replace(new RegExp(`\\s${attr}\\s*=\\s*("[^"]*"|'[^']*'|[^\s>]+)`, 'gi'), '');
+    out = out.replace(new RegExp(`\\s${attr}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)`, 'gi'), '');
+  }
+
+  // 4. Restitution des `<meta>` mis de côté. La boucle remplace chaque
+  //    sentinelle par son balisage d'origine, fidèle à la saisie — un `<meta>`
+  //    ne peut pas être reconstruit, seulement rendu tel quel.
+  if (safeMetas.length > 0) {
+    out = out.replace(/\u0000gm-meta-(\d+)\u0000/g, (_, index: string) => {
+      return safeMetas[Number(index)] ?? '';
+    });
   }
 
   return out;
