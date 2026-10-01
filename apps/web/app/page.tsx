@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ShieldCheck, Wallet, Users } from 'lucide-react';
 import { SiteNav } from '@/components/site-nav';
 import { SiteFooter } from '@/components/site-footer';
-import { TicketStub } from '@/components/ticket-stub';
+import { HeroVideo } from '@/components/hero-video';
 import { faqJsonLd } from '@/lib/seo';
 
 const FAQ_ITEMS = [
@@ -38,7 +38,7 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd(FAQ_ITEMS)) }}
       />
       <main>
-        {/* HERO — le talon de billet, thèse du produit */}
+        {/* HERO — la thèse du produit, illustrée par le motion design */}
         <section className="relative overflow-hidden border-b border-white/10 bg-navy">
           <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-16 pt-12 md:grid-cols-2 md:py-28 lg:gap-12">
             <div>
@@ -70,13 +70,9 @@ export default function HomePage() {
               </div>
             </div>
 
-            <TicketStub
-              leftLabel="Vendeur"
-              leftValue="Gorgui M."
-              rightLabel="Statut"
-              rightValue="45 000 FCFA"
-              reference="GM-8F3K2A-01"
-              status="active"
+            <HeroVideo
+              src="/hero-motion.mp4"
+              label="Animation de la marketplace Gaming Market Sénégal"
             />
           </div>
         </section>
