@@ -315,6 +315,58 @@ export class EmailService {
   }
 
   /**
+   * Point d'entrée pour un email rédigé depuis le back-office.
+   *
+   * Seule voie publique qui accepte un sujet et un HTML fournis par
+   * l'appelant : les 18 méthodes ci-dessus passent toutes par un template
+   * `email.templates.ts` où chaque valeur est échappée. Ici le HTML vient
+   * d'un `<textarea>` admin, il est donc désinfecté par l'appelant
+   * (`sanitizeEmailHtml`) avant d'arriver ici.
+   *
+   * On ne touche pas à la signature de `send` : la modifier obligerait à
+   * relire ses 18 appelants alors qu'un point d'entrée supplémentaire suffit
+   * et laisse le chemin transactionnel strictement inchangé.
+   *
+   * `kind` décide des en-têtes, et cette décision est prise ici plutôt que
+   * chez l'appelant : c'est le dernier point où l'on sait si l'envoi est
+   * commercial ou transactionnel, et il n'y a qu'une seule manière de le
+   * respecter. Un `COMMERCIAL` sans lien de désinscription est un email
+   * commercial sans issue pour le lecteur, donc la garde refuse l'envoi
+   * plutôt que de laisser passer un message non conforme.
+   */
+  static async sendAdminBroadcast(params: {
+    to: string;
+    subject: string;
+    html: string;
+    kind: 'COMMERCIAL' | 'TRANSACTIONAL';
+    unsubscribeUrl?: string;
+  }): Promise<void> {
+    if (params.kind === 'COMMERCIAL' && !params.unsubscribeUrl) {
+      throw new Error(
+        'Envoi commercial sans lien de désinscription — refusing d\'envoyer un message sollicité sans issue pour le lecteur.',
+      );
+    }
+    const headers =
+      params.kind === 'COMMERCIAL' && params.unsubscribeUrl
+        ? {
+            // Les deux en-têtes vont de pair (RFC 8058) : Gmail et Yahoo
+            // n'affichent le bouton « Se désabonner » que si les deux sont
+            // présents, et un `List-Unsubscribe` seul est ignoré par plusieurs
+            // clients. Le `<...>` est la forme multiple imposée par la RFC 2369.
+            'List-Unsubscribe': `<${params.unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          }
+        : undefined;
+    await this.send(
+      params.to,
+      params.subject,
+      params.html,
+      `admin-${params.kind.toLowerCase()}`,
+      headers,
+    );
+  }
+
+  /**
    * Newsletter : selection des comptes les plus consultes.
    *
    * Seul envoi commercial du systeme, et seul appelant de `headers`. Les deux

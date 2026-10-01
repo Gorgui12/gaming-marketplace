@@ -116,6 +116,8 @@ const envSchema = z.object({
    * `2,5` = mardi et vendredi, soit deux envois par semaine.
    */
   NEWSLETTER_DAYS: z.string().default('2'),
+  ADMIN_EMAIL_BULK_THRESHOLD: z.coerce.number().int().min(1).max(100000).default(50),
+  ADMIN_EMAIL_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(5),
 
   GOOGLE_CLIENT_ID: z.string().optional(),
 

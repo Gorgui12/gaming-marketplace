@@ -5,6 +5,7 @@ import { logger } from './lib/logger.js';
 import { env } from './config/env.js';
 import { PaymentService } from './modules/payments/payments.service.js';
 import { EmailService } from './lib/email/email.service.js';
+import { reapStaleRuns } from './lib/email/email-broadcast.service.js';
 import type { Server } from 'node:http';
 
 // Fréquence du balayage des paiements abandonnés (filet de sécurité anti
@@ -31,6 +32,12 @@ async function main(): Promise<void> {
   server = app.listen(PORT, HOST, () => {
     logger.info(`API démarrée sur http://${HOST}:${PORT} (${env.NODE_ENV})`);
   });
+
+  // Marque FAILED les envois RUNNING trop anciens (redémarrage en plein envoi).
+  const stale = await reapStaleRuns();
+  if (stale > 0) {
+    logger.warn({ count: stale }, 'Envois admin RUNNING trop anciens marqués FAILED');
+  }
 
   // Diagnostic Resend au démarrage : si l'API est injoignable (mauvaise clé,
   // quota épuisé...), c'est visible dès le boot dans les logs — au lieu
