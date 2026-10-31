@@ -26,6 +26,13 @@ const envSchema = z.object({
   // bloquer le retour à paydunya si l'on n'a pas de clé UnitechPay.
   UNITECHPAY_API_KEY: z.string().min(1).optional(),
   UNITECHPAY_BASE_URL: z.string().url().default('https://api.unitech.sn/api.php'),
+  // Relais optionnel (ex. route Next.js sur Vercel) : certains hebergeurs
+  // (Render Oregon) n'arrivent pas a joindre api.unitech.sn, alors que le
+  // reseau Vercel y parvient. Quand cette URL est definie, elle remplace
+  // UNITECHPAY_BASE_URL et le secret partage est envoye dans l'en-tete
+  // `x-relay-secret`.
+  UNITECHPAY_RELAY_URL: z.string().url().optional(),
+  UNITECHPAY_RELAY_SECRET: z.string().min(16).optional(),
 
   // --- PayDunya ---
   // Optionnel désormais : bloquer le démarrage quand on n'utilise pas
@@ -163,6 +170,15 @@ const envSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'PAYMENT_PROVIDER=unitechpay exige UNITECHPAY_API_KEY',
+    });
+  }
+  // Le relais est un endpoint public : sans secret partage, n'importe qui
+  // pourrait s'en servir comme proxy vers le prestataire.
+  if (val.UNITECHPAY_RELAY_URL && !val.UNITECHPAY_RELAY_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['UNITECHPAY_RELAY_SECRET'],
+      message: 'UNITECHPAY_RELAY_URL exige UNITECHPAY_RELAY_SECRET',
     });
   }
 

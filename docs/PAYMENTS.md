@@ -64,6 +64,40 @@ dépendance de boot trop fragile. Faire cet appel une seule fois, à la main
 ou via un script ponctuel, en pointant vers :
 `API_PUBLIC_URL + /api/v1/payments/unitechpay/webhook`.
 
+### Relais Vercel (contournement egress Render)
+
+Le reseau sortant de Render (Oregon) n'arrive pas a joindre `api.unitech.sn`
+(timeout TCP, aucune reponse HTTP). L'app web Vercel expose donc une route
+relais server-to-server :
+
+- URL : `https://gamingmarket.store/api/payments/unitechpay-relay`
+- Fichier : `apps/web/app/api/payments/unitechpay-relay/route.ts`
+- Actions autorisees : `create_wave_payment` (POST) et `transactions` (GET)
+- Authentification : en-tete `x-relay-secret`, compare a
+  `UNITECHPAY_RELAY_SECRET` (minimum 16 caracteres, a definir **sur Vercel**).
+  La cle UnitechPay n'est pas stockee sur Vercel : elle transite dans
+  l'en-tete `Authorization` de la requete Render -> Vercel -> UnitechPay.
+
+Cote API Render, definir :
+
+```
+UNITECHPAY_RELAY_URL=https://gamingmarket.store/api/payments/unitechpay-relay
+UNITECHPAY_RELAY_SECRET=<meme secret que sur Vercel>
+```
+
+Quand `UNITECHPAY_RELAY_URL` est defini, `UnitechPayProvider` l'utilise a la
+place de `UNITECHPAY_BASE_URL` et ajoute `x-relay-secret`. Sans ce couple de
+variables, le comportement d'origine (appel direct) est conserve.
+
+Verification apres deploiement (depuis n'importe ou, le relais exige le
+secret) :
+
+```
+curl -i -H "x-relay-secret: $UNITECHPAY_RELAY_SECRET" \
+  -H "Authorization: Bearer $UNITECHPAY_API_KEY" \
+  "https://gamingmarket.store/api/payments/unitechpay-relay?action=transactions"
+```
+
 ## Séquestre : purement logique, pas de blocage réel de fonds
 
 **Ni UnitechPay ni PayDunya ne proposent de mécanisme natif de séquestre.**
@@ -165,6 +199,8 @@ PAYMENT_PROVIDER         # 'unitechpay' (défaut) | 'paydunya'
 
 # UnitechPay — obligatoire quand PAYMENT_PROVIDER=unitechpay
 UNITECHPAY_API_KEY
+UNITECHPAY_RELAY_URL     # optionnel: relais Vercel (contourne le blocage Render)
+UNITECHPAY_RELAY_SECRET  # obligatoire si UNITECHPAY_RELAY_URL est defini (>=16)
 UNITECHPAY_BASE_URL      # défaut: https://api.unitech.sn/api.php
 
 # PayDunya — obligatoires uniquement quand PAYMENT_PROVIDER=paydunya

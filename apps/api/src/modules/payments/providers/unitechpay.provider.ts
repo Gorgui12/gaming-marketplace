@@ -49,14 +49,39 @@ function mapStatus(status: string | undefined): ProviderPaymentStatus {
 
 export class UnitechPayProvider implements PaymentProvider {
   private async request(path: string, init?: RequestInit): Promise<unknown> {
-    const res = await fetch(`${env.UNITECHPAY_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${env.UNITECHPAY_API_KEY}`,
-        'Content-Type': 'application/json',
-        ...(init?.headers ?? {}),
-      },
-    });
+    const usingRelay = Boolean(env.UNITECHPAY_RELAY_URL);
+    const baseUrl = env.UNITECHPAY_RELAY_URL ?? env.UNITECHPAY_BASE_URL;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${env.UNITECHPAY_API_KEY}`,
+      'Content-Type': 'application/json',
+    };
+    if (usingRelay && env.UNITECHPAY_RELAY_SECRET) {
+      headers['x-relay-secret'] = env.UNITECHPAY_RELAY_SECRET;
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
+        // Sans timeout explicite, undici abandonne au bout de ~10 s avec un
+        // message opaque (`fetch failed`). Le relais Vercel repond en < 2 s
+        // quand il fonctionne : 25 s laisse de la marge sans bloquer la route.
+        signal: AbortSignal.timeout(25_000),
+      });
+    } catch (err) {
+      const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+      logger.error(
+        {
+          err,
+          baseUrl,
+          usingRelay,
+          cause: cause?.code ?? cause?.message,
+        },
+        'Echec reseau UnitechPay',
+      );
+      throw err;
+    }
 
     const body = await res.text();
 

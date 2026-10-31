@@ -77,6 +77,10 @@ export class PaymentService {
         actor: 'SYSTEM',
       });
       transaction.escrowStatus = TransactionState.CANCELLED;
+      // Sans ce marquage, une transaction annulee reste `paymentStatus:
+      // PENDING` et l'admin ne distingue pas un echec d'initiation d'un
+      // paiement encore en attente.
+      transaction.paymentStatus = PaymentStatus.FAILED;
       await transaction.save().catch(() => {});
       await ListingModel.updateOne(
         { _id: transaction.listing, status: ListingStatus.RESERVED },

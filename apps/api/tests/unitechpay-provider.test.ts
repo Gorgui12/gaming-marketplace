@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
+import { env } from '../src/config/env.js';
 import { UnitechPayProvider } from '../src/modules/payments/providers/unitechpay.provider.js';
 import { AppError } from '../src/lib/errors/app-error.js';
 import { ErrorCode } from '../src/lib/errors/error-codes.js';
@@ -29,6 +30,52 @@ function signedWebhook(overrides: Record<string, unknown> = {}) {
   data.signature = sign(data as never);
   return data;
 }
+
+const originalRelayUrl = env.UNITECHPAY_RELAY_URL;
+const originalRelaySecret = env.UNITECHPAY_RELAY_SECRET;
+
+afterEach(() => {
+  env.UNITECHPAY_RELAY_URL = originalRelayUrl;
+  env.UNITECHPAY_RELAY_SECRET = originalRelaySecret;
+  vi.unstubAllGlobals();
+});
+
+describe('UnitechPayProvider.request via relais', () => {
+  it('utilise UNITECHPAY_RELAY_URL et transmet le secret partage', async () => {
+    env.UNITECHPAY_RELAY_URL = 'https://relay.test/api.php';
+    env.UNITECHPAY_RELAY_SECRET = 'test-relay-secret-1234';
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { transaction_id: 42, payment_url: 'https://pay.test/42' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await new UnitechPayProvider().initiatePayment({
+      amount: 15000,
+      currency: 'XOF',
+      reference: 'TX-TEST',
+      description: 'Test relais',
+      customer: { name: 'Awa', email: 'awa@test.invalid', phone: '+221770000000' },
+      returnUrl: 'https://gamingmarket.store/return',
+      notifyUrl: 'https://gamingmarket.store/webhook',
+    });
+
+    expect(result).toEqual({
+      paymentUrl: 'https://pay.test/42',
+      providerTransactionId: '42',
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://relay.test/api.php?action=create_wave_payment');
+    const headers = init.headers as Record<string, string>;
+    expect(headers['x-relay-secret']).toBe('test-relay-secret-1234');
+    expect(headers.Authorization).toBe('Bearer test-unitechpay-api-key');
+  });
+});
 
 describe('UnitechPayProvider.parseWebhook', () => {
   const provider = new UnitechPayProvider();

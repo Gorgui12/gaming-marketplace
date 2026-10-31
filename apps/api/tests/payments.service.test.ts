@@ -22,8 +22,10 @@ const pristinePaymentEventCreate = fakePaymentEventModel.create.bind(fakePayment
 // quand il était le provider par défaut).
 const parseWebhookMock = vi.fn();
 const verifyTransactionMock = vi.fn();
+const initiatePaymentMock = vi.fn();
 vi.mock('../src/modules/payments/providers/unitechpay.provider.js', () => ({
   UnitechPayProvider: vi.fn().mockImplementation(() => ({
+    initiatePayment: initiatePaymentMock,
     parseWebhook: parseWebhookMock,
     verifyTransaction: verifyTransactionMock,
   })),
@@ -200,6 +202,46 @@ describe('PaymentService.handleWebhook — idempotence', () => {
     await PaymentService.handleWebhook({}, {});
 
     expect(createConversionMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaymentService.initiateForTransaction - echec du provider', () => {
+  beforeEach(() => {
+    fakeTransactionModel.__reset();
+    fakePaymentEventModel.__reset();
+    vi.clearAllMocks();
+  });
+
+  it('annule la transaction, marque le paiement FAILED et libere l annonce', async () => {
+    const txn = await fakeTransactionModel.create({
+      paymentReference: 'GM-INIT-1',
+      escrowStatus: TransactionState.CREATED,
+      paymentStatus: PaymentStatus.PENDING,
+      stateHistory: [],
+      listing: 'listing-init-1',
+      buyer: 'user-1',
+      amount: 15000,
+      currency: 'XOF',
+    });
+    await fakeListingModel.create({ _id: 'listing-init-1', status: ListingStatus.RESERVED });
+    initiatePaymentMock.mockRejectedValue(new Error('fetch failed'));
+
+    await expect(
+      PaymentService.initiateForTransaction({
+        transactionId: txn._id,
+        buyerName: 'Awa',
+        buyerEmail: 'awa@test.invalid',
+        buyerPhone: '+221770000000',
+        returnUrl: 'https://gamingmarket.store/return',
+      }),
+    ).rejects.toThrow('fetch failed');
+
+    const updated = await fakeTransactionModel.findById(txn._id);
+    expect(updated!.escrowStatus).toBe(TransactionState.CANCELLED);
+    expect(updated!.paymentStatus).toBe(PaymentStatus.FAILED);
+
+    const listing = await fakeListingModel.findById('listing-init-1');
+    expect(listing!.status).toBe(ListingStatus.PUBLISHED);
   });
 });
 

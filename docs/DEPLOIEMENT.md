@@ -109,10 +109,14 @@ NODE_VERSION=22
 API_PORT=4000
 API_PUBLIC_URL=https://<service>.onrender.com
 APP_URL=https://gamingmarket.store
+# Ne jamais laisser un placeholder ici : ce champ alimente les liens de
+# desinscription/newsletter et le callbackURL PayDunya. En prod actuelle :
+# https://gaming-marketplace.onrender.com
 SESSION_COOKIE_NAME=gm_session
 SESSION_TTL_DAYS=7
 PAYMENT_PROVIDER=unitechpay
 UNITECHPAY_BASE_URL=https://api.unitech.sn/api.php
+UNITECHPAY_RELAY_URL=https://gamingmarket.store/api/payments/unitechpay-relay
 STORAGE_PROVIDER=cloudinary
 CORS_ALLOWED_ORIGINS=https://gamingmarket.store,https://admin.gamingmarket.store
 RATE_LIMIT_WINDOW_MS=60000
@@ -289,6 +293,7 @@ SESSION_SECRET                     >= 32 caractères
 ACCOUNT_CREDENTIALS_ENCRYPTION_KEY  >= 32 caractères, différent du précédent
 RESEND_API_KEY
 UNITECHPAY_API_KEY
+UNITECHPAY_RELAY_SECRET            >= 16 caracteres, identique cote Vercel
 STORAGE_API_KEY
 STORAGE_API_SECRET
 STORAGE_CLOUD_NAME
@@ -307,6 +312,10 @@ l'URL cible change, dans les projets Vercel concernés :
   navigateur). C'est elle qu'utilisent le proxy `/backend/*` (`next.config.ts:29`)
   et l'`api-client.ts`. Le navigateur ne voit que l'origine du site, ce qui garde
   le cookie de session first-party — nécessaire pour Safari iOS.
+- **apps/web** — variable serveur `UNITECHPAY_RELAY_SECRET` (meme valeur que
+  sur Render). Elle protege la route
+  `/api/payments/unitechpay-relay` : sans elle, le relais repond 500. Ne pas
+  la prefixer `NEXT_PUBLIC_` (elle ne doit jamais partir au navigateur).
 - **apps/admin** — variable `NEXT_PUBLIC_API_URL`, à ajouter à
   `CORS_ALLOWED_ORIGINS` côté API.
 
