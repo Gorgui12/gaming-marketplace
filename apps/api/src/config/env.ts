@@ -1,12 +1,22 @@
 import { z } from 'zod';
 
+// Les variables collees depuis un terminal ou un fichier .env arrivent
+// souvent avec un espace, un saut de ligne ou des guillemets. On les nettoie
+// avant validation : sinon l'API refuse de demarrer pour un simple '\n' dans
+// le dashboard Render (cas vecu avec API_PUBLIC_URL).
+const urlSchema = z.preprocess(
+  (value) =>
+    typeof value === 'string' ? value.trim().replace(/^(["'])(.*)\1$/, '$2') : value,
+  z.string().url({ message: 'URL absolue attendue (ex. https://exemple.com)' }),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().positive().default(4000),
-  API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
+  API_PUBLIC_URL: urlSchema.default('http://localhost:4000'),
 
   // URL publique de l'app web, utilisée pour les liens des emails sortants
-  APP_URL: z.string().url().default('http://localhost:3000'),
+  APP_URL: urlSchema.default('http://localhost:3000'),
 
   MONGODB_URI: z.string().min(1, 'MONGODB_URI est obligatoire'),
 
@@ -25,13 +35,13 @@ const envSchema = z.object({
   // l'exige uniquement quand PAYMENT_PROVIDER=unitechpay, pour ne pas
   // bloquer le retour à paydunya si l'on n'a pas de clé UnitechPay.
   UNITECHPAY_API_KEY: z.string().min(1).optional(),
-  UNITECHPAY_BASE_URL: z.string().url().default('https://api.unitech.sn/api.php'),
+  UNITECHPAY_BASE_URL: urlSchema.default('https://api.unitech.sn/api.php'),
   // Relais optionnel (ex. route Next.js sur Vercel) : certains hebergeurs
   // (Render Oregon) n'arrivent pas a joindre api.unitech.sn, alors que le
   // reseau Vercel y parvient. Quand cette URL est definie, elle remplace
   // UNITECHPAY_BASE_URL et le secret partage est envoye dans l'en-tete
   // `x-relay-secret`.
-  UNITECHPAY_RELAY_URL: z.string().url().optional(),
+  UNITECHPAY_RELAY_URL: urlSchema.optional(),
   UNITECHPAY_RELAY_SECRET: z.string().min(16).optional(),
 
   // --- PayDunya ---
@@ -245,8 +255,14 @@ function loadEnv(): Env {
     // eslint-disable-next-line no-console
     console.error('❌ Variables d\'environnement invalides ou manquantes:');
     for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.');
+      // Les URL ne sont pas des secrets : afficher la valeur recue evite de
+      // chercher a l'aveugle un espace ou un guillemet dans le dashboard.
+      const raw = key.endsWith('_URL') ? process.env[key] : undefined;
       // eslint-disable-next-line no-console
-      console.error(`   - ${issue.path.join('.')}: ${issue.message}`);
+      console.error(
+        `   - ${key}: ${issue.message}${raw ? ` (valeur recue: ${JSON.stringify(raw)})` : ''}`,
+      );
     }
     process.exit(1);
   }
